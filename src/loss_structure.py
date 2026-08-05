@@ -15,12 +15,12 @@ COST= {
     'cost_per_admission' : 3000.0 # based on GHM studies
     'base_activity_loss' : 420000.0 # based on INSEE/CCI studies
     'base_assets_loss' : 680000.0 # based on the French Federation of the assurance
-    'intervention_lost' : 75000.0 # based on SDIS reimbursement grid
+    'intervention_cost' : 75000.0 # based on SDIS reimbursement grid
     'max_insurance_payout' : 500000.0 # based on contracts of differents assurance (CCR, AXA CLIMATE...)
 }
 
 def total_loss(u, H_r, param = COST) :
-    
+
     L_health = H_r * (1.0 - 0.5 * u[2]) * param['cost_per_admission']
     L_activity = param['base_activity_loss'] * fire_intensity * (1.0 - 0.4 * u[1])
     L_assets = param['base_assets_loss'] * fire_intensity * (1.0 - 0.5 * u[0])
