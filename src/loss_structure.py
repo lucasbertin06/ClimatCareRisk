@@ -63,3 +63,15 @@ def compute_risk_metrics(losses, prob = ALPHA_CVAR) : # This function returns EL
     es = expected_Shortfall(losses, prob)
     
     return el, var, es
+
+def robust_objective(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar, budget_max, param) : # Function that implements the Robust Objective Function
+    # J(u) = Expected Loss + lambda * CVaR + Pénalities (Budget and Bounds [0,1])
+
+
+def optimize_portfolio(scenarios_H_r, scenarios_fire , basis_noises=None, lambda_cvar = 0.5, budget_max = BUDGET_MAX, lr = 0.01, steps = 300):
+    # scenario_fire : L'erreur ou l'écart de mesure entre l'indice satellite/météo et la réalité du terrain : 0 = mesure parfaite
+    # lr : vitesse a laquelle la descente de gradient modifie u a chaque etape
+    # steps : Nombre total d'itérations d'ajustement du portefeuille. À chaque itération, JAX calcule le gradient de J(u) et met à jour u   
+
+def generate_efficient_frontier(scenarios_H_r, scenarios_fire, basis_noises, n_points) :
+    # n_points : Le nombre de portefeuilles optimaux à calculer le long de la frontière
