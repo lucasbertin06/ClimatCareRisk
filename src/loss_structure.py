@@ -64,14 +64,38 @@ def compute_risk_metrics(losses, prob = ALPHA_CVAR) : # This function returns EL
     
     return el, var, es
 
-def robust_objective(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar, budget_max, param) : # Function that implements the Robust Objective Function
-    # J(u) = Expected Loss + lambda * CVaR + Pénalities (Budget and Bounds [0,1])
+def robust_objective(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar, budget_max, param) : # Function that implements the Robust Objective Function, adds EL and CVaR et applies penalities if the investment is over budget_max  
+    # J(u) = Expected Loss + lambda * CVaR + Penalities (Budget and Bounds [0,1])
+    # basis_noise : L'erreur ou l'écart de mesure entre l'indice satellite/météo et la réalité du terrain : 0 = mesure parfaite
+    if basis_noise is None :    
+        basis_noises = jnp.zeros_like(scenarios_fire) 
 
+    # penalities
+    total_capex = jnp.sum(u * param['unit_costs'])
 
-def optimize_portfolio(scenarios_H_r, scenarios_fire , basis_noises=None, lambda_cvar = 0.5, budget_max = BUDGET_MAX, lr = 0.01, steps = 300):
-    # scenario_fire : L'erreur ou l'écart de mesure entre l'indice satellite/météo et la réalité du terrain : 0 = mesure parfaite
+def optimize_portfolio(scenarios_H_r, scenarios_fire , basis_noises = None, lambda_cvar = 0.5, budget_max = BUDGET_MAX, lr = 0.01, steps = 300) : # finds the optimal protfolio u* by gradient descent with JAX .
     # lr : vitesse a laquelle la descente de gradient modifie u a chaque etape
     # steps : Nombre total d'itérations d'ajustement du portefeuille. À chaque itération, JAX calcule le gradient de J(u) et met à jour u   
+    if basis_noises is None:
+        basis_noises = jnp.zeros_like(scenarios_fire)
 
-def generate_efficient_frontier(scenarios_H_r, scenarios_fire, basis_noises, n_points) :
-    # n_points : Le nombre de portefeuilles optimaux à calculer le long de la frontière
+    u = jnp.array([0.2, 0.2, 0.2, 0.2, 0.2])
+    grad_fn = jax.jit(jax.grad(robust_objective, argnums = 0))
+    
+    for i in range(steps):
+        grads = grad_fn(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar, budget_max)
+        u = u - lr * grads
+        u = jnp.clip(u, 0.0, 1.0)
+        
+    return u    
+
+def generate_efficient_frontier(scenarios_H_r, scenarios_fire, basis_noises, n_points) : # Computes the Pareto frontier (EL vs. CVaR) by sweeping through n_points values of lambda_cvar
+    # n_points : The number of optimal portfolios to compute along the frontier.
+    if basis_noises is None:
+        basis_noises = jnp.zeros_like(scenarios_fire)
+        
+    lambdas = jnp.linspace(0.0, 2.0, n_points)
+    frontier_portfolios, frontier_el, frontier_es = [], [], []
+    
+    for lmbda in lambdas:
+        u_opt = optimize_portfolio(scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar = lmbda)
