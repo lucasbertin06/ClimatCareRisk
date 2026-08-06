@@ -70,8 +70,22 @@ def robust_objective(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar
     if basis_noise is None :    
         basis_noises = jnp.zeros_like(scenarios_fire) 
 
-    # penalities
+    # penalties
     total_capex = jnp.sum(u * param['unit_costs'])
+    budget_penalty = 1e6 * jnp.square(jnp.maximum(0.0, total_capex - budget_max))
+
+    # penalties if we go over budget
+    bounds_penalty = 1e6 * jnp.sum(jnp.square(jnp.maximum(0.0, -u)) + jnp.square(jnp.maximum(0.0, u - 1.0)))
+    
+    # Évaluation vectorisée sur l'ensemble des scénarios
+    losses = jax.vmap(
+        lambda h, f, n: total_loss(u, h, f, n, param)
+    )(scenarios_H_r, scenarios_fire, basis_noises)
+    
+    el = jnp.mean(losses)
+    es = expected_Shortfall(losses, prob=ALPHA_CVAR)
+    
+    return el + lambda_cvar * es + budget_penalty + bounds_penalty
 
 def optimize_portfolio(scenarios_H_r, scenarios_fire , basis_noises = None, lambda_cvar = 0.5, budget_max = BUDGET_MAX, lr = 0.01, steps = 300) : # finds the optimal protfolio u* by gradient descent with JAX .
     # lr : vitesse a laquelle la descente de gradient modifie u a chaque etape
@@ -99,3 +113,12 @@ def generate_efficient_frontier(scenarios_H_r, scenarios_fire, basis_noises, n_p
     
     for lmbda in lambdas:
         u_opt = optimize_portfolio(scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar = lmbda)
+        
+        losses = jax.vmap(lambda h, f, n: total_loss(u_opt, h, f, n))(scenarios_H_r, scenarios_fire, basis_noises)
+        el, _, es = compute_risk_metrics(losses)
+        
+        frontier_portfolios.append(u_opt)
+        frontier_el.append(el)
+        frontier_es.append(es)
+        
+    return jnp.array(frontier_portfolios), jnp.array(frontier_el), jnp.array(frontier_es)
