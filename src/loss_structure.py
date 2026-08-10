@@ -36,27 +36,6 @@ def total_loss(u, H_r, param = COST) :
     
     return L_tot
 
-# Next function is for risk calculations (EL, VaR, CVaR)
-
-def VaR(losses, prob = ALPHA_CVAR) : 
-    # Calculate the Value at Risk (VaR) : Exemple: prob = 0.95 -> 95% of simulated loss stay under this treshold
-
-    sorted_losses = jnp.sort(losses)
-    in_VaR_index = jnp.astype(prob * (len(sorted_losses) - 1), jnp.int32)
-    return sorted_losses[in_VaR_index]
-
-def expected_Shortfall(losses, prob = ALPHA_CVAR) : # aka CVaR
-    # calculate the abg loss in the (1 - prob) % worst case scenario.
- 
-    sorted_losses = jnp.sort(losses)
-    es_index = jnp.astype(prob * (len(sorted_losses) - 1), jnp.int32)
-    
-    tail_mask = jnp.arange(len(sorted_losses)) >= es_index
-    tail_sum = jnp.sum(jnp.where(tail_mask, sorted_losses, 0.0))
-    tail_count = jnp.sum(tail_mask)
-    
-    return tail_sum / tail_count
-
 def compute_risk_metrics(losses, prob = ALPHA_CVAR) : # This function returns EL, VaR, Expected Shortfall/CVaR 
     el = jnp.mean(losses) # the avg annual loss
     var = VaR(losses, prob)
@@ -122,3 +101,34 @@ def generate_efficient_frontier(scenarios_H_r, scenarios_fire, basis_noises, n_p
         frontier_es.append(es)
         
     return jnp.array(frontier_portfolios), jnp.array(frontier_el), jnp.array(frontier_es)
+
+def smooth_plus(value: jax.Array, tau: float) -> jax.Array:
+    r"""Return :math:`\tau\log(1+e^{x/\tau})`, evaluated stably."""
+    scaled = value / tau
+    return tau * (jnp.maximum(scaled, 0.0) + jnp.log1p(jnp.exp(-jnp.abs(scaled))))
+
+def conditional_value_at_risk(
+    losses: jax.Array, zeta: jax.Array | float, params: FinanceParams
+) -> jax.Array:
+    r"""Return the smoothed Rockafellar-Uryasev CVaR estimator of section 12.
+
+    No sort is used, so the estimator stays differentiable under any permutation
+    of the scenarios.
+    """
+    tail = smooth_plus(losses - jnp.asarray(zeta), params.smoothing)
+    scale = (1.0 - params.alpha) * losses.shape[0]
+    return jnp.asarray(zeta) + jnp.sum(tail) / scale
+
+
+def optimal_cvar(losses: jax.Array, params: FinanceParams, steps: int = 200) -> jax.Array:
+    r"""Minimise the CVaR estimator over :math:`\zeta` by bisection-free descent.
+
+    The estimator is convex in :math:`\zeta`; a short gradient descent from the
+    empirical mean is enough for the C0 invariant tests.
+    """
+    zeta = jnp.mean(losses)
+    grad_fn = jax.grad(lambda value: conditional_value_at_risk(losses, value, params))
+    scale = jnp.maximum(jnp.std(losses), params.smoothing)
+    for _ in range(steps):
+        zeta = zeta - 0.5 * scale * grad_fn(zeta)
+    return conditional_value_at_risk(losses, zeta, params)
