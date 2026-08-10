@@ -120,7 +120,7 @@ def conditional_value_at_risk(
     return jnp.asarray(zeta) + jnp.sum(tail) / scale
 
 
-def optimal_cvar(losses: jax.Array, params: FinanceParams, steps: int = 200) -> jax.Array:
+def optimal_cvar(losses: jax.Array, params: FinanceParams, steps: int = 200) -> jax.Array :
     r"""Minimise the CVaR estimator over :math:`\zeta` by bisection-free descent.
 
     The estimator is convex in :math:`\zeta`; a short gradient descent from the
