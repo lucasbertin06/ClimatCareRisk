@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plume_inversion_shared"
+version = "0.2.0"
+description = "Shared differentiable kernels for Tesseract scientific workflows"
+authors = [{ name = "TataneSan" }]
+requires-python = ">=3.11"
+dependencies = [
+    # Add dependencies here
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "climacare_shared",
+    "climacare_shared.*",
+    "plume_inversion_shared",
+    "plume_inversion_shared.*",
+    "wildfire_shared",
+    "wildfire_shared.*",
+]

@@ -1,0 +1,98 @@
+# ClimaCare-Risk — Tiny case, slice C0.
+#
+# Single configuration used by `make tiny-direct`, `make tiny-gradient` and
+# `make tiny-map`. Frozen after simultaneous verification of nu_T <= 1 and
+# nu_c <= 1 (see `tiny_report` in app/climacare/config.py, and the realised
+# values recorded in the provenance block of every artifact).
+#
+# Realised stability budgets for the values below:
+#   nu_T = 0.468384   (bound |v| <= fire.wind_speed, section 4.6)
+#   nu_c = 0.598288   (bound |w| <= smoke.wind_speed, section 5.4)
+#   dt * k_r = 0.12
+#
+# No public data, no real observation. Everything is synthetic and
+# dimensionless; see docs/mathematical_specification.md section 17 for the
+# usage limits.
+case: tiny
+seed: 20260805
+
+grid:
+  nx: 32
+  ny: 32
+
+time:
+  dt: 0.02
+  n_steps: 60
+
+# Shared wind of specification section 3. delta_phi bounds keep both components
+# far from zero, so the upwind split never changes branch.
+wind:
+  phi_base_deg: 35.0
+  fire_speed: 0.35
+  smoke_speed: 0.45
+  delta_phi_max: 0.35
+
+fire:
+  diffusivity: 2.0e-4          # D_T
+  heat_loss: 0.20              # h
+  heat_release: 0.80           # Q
+  reaction_rate: 6.0           # k_r
+  moisture_sensitivity: 1.2    # alpha_M
+  ignition_threshold: 0.50     # T_ign
+  ignition_width: 0.05         # eps_T
+  source_sigma: 0.055          # sigma_0
+  smoke_yield: 1.0             # eta_smoke
+  moisture: 0.15               # uniform M
+  fuel_base: 1.0               # uniform F_base
+  fuel_prevention: 0.0         # uniform u_fuel
+
+smoke:
+  diffusivity: 1.5e-4          # D_c
+  decay: 0.5                   # lambda_c
+
+# Ground truth, strictly interior to every bound.
+truth:
+  x0: 0.30
+  y0: 0.28
+  log_amplitude: 0.1823215568   # log(1.2)
+  delta_phi: 0.12
+
+# Deliberately wrong starting point for the MAP optimisation.
+initial_guess:
+  x0: 0.45
+  y0: 0.42
+  log_amplitude: 0.0
+  delta_phi: -0.05
+
+priors:
+  margin: 0.0625                # m_x = m_y = 2 dx
+  log_amplitude_mean: 0.0       # mu_A
+  log_amplitude_std: 0.5        # s_A
+  delta_phi_std: 0.15           # s_phi
+
+# Three non-collinear interior sensors, all downwind of the truth with
+# different ranges and one clear cross-wind flank.
+sensors:
+  positions:
+    - [0.55, 0.55]
+    - [0.72, 0.66]
+    - [0.66, 0.44]
+  bias: [0.0, 0.0, 0.0]
+  noise_std: [0.02, 0.02, 0.02]
+  mask_fraction: 0.05
+
+output:
+  frame_count: 13               # evenly spaced snapshots for the panel
+
+optimization:
+  # Quasi-Newton descent on the unconstrained parameters of section 2.2, driven
+  # by a single jax.value_and_grad of the composed loss. `adam` is kept as an
+  # alternative; `learning_rate` only applies to it.
+  optimizer: lbfgs
+  iterations: 30
+  learning_rate: 0.04
+
+gradient_check:
+  epsilon: 1.0e-4               # relative finite-difference step
+  step_factors: [0.5, 1.0, 2.0]
+  absolute_floor: 1.0e-8

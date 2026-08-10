@@ -1,0 +1,82 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "plume_inversion"
+dynamic = ["version"]
+description = "Differentiable wildfire prevention planning across heterogeneous Tesseracts."
+authors = [{ name = "TataneSan" }]
+license = "Apache-2.0"
+requires-python = ">=3.12"
+dependencies = [
+    "tesseract-core==1.11.0",
+    "jax==0.11.0",
+    "jaxlib==0.11.0",
+    "equinox==0.13.8",
+    "optax==0.2.8",
+    "torch>=2.0",
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "pyproj>=3.6",
+    "rasterio>=1.4",
+    "requests>=2.32",
+    "scipy>=1.14",
+    "shapely>=2.0",
+    "pyshp==2.3.1",
+    "tesseract-jax==0.4.1",
+    "tesseract-torch==0.1.0",
+    "typer>=0.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    # For running app/chain.ipynb
+    "jupyter",
+    "matplotlib",
+    "numpy",
+    "pyyaml",
+    "certifi",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "httpx>=0.27",
+    "plotly>=5.24",
+    "streamlit>=1.40",
+]
+visualization = [
+    "matplotlib",
+    "plotly",
+    "streamlit",
+]
+data = [
+    "pandas",
+    "pyyaml",
+    "rasterio",
+    "requests",
+    "scipy",
+    "shapely",
+]
+modal = [
+    "modal",
+]
+
+[project.scripts]
+"plume_inversion" = "plume_inversion.main:entrypoint"
+
+# Version is derived from git tags via hatch-vcs. Tag a release (e.g. `git tag
+# v0.1.0`) to set the version; between tags it is inferred from the latest tag
+# plus commit distance. `raw-options.root` points at the repository root one
+# level up, since this package lives in the `app/` subdirectory of the monorepo.
+# `fallback-version` keeps builds working when git metadata is unavailable
+# (e.g. building from an sdist or outside a checkout).
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0+unknown"
+raw-options = { root = ".." }
+
+[tool.hatch.build.hooks.vcs]
+version-file = "plume_inversion/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["plume_inversion", "wildfire"]

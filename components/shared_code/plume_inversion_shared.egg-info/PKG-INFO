@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: plume_inversion_shared
+Version: 0.2.0
+Summary: Shared differentiable kernels for Tesseract scientific workflows
+Author: TataneSan
+Requires-Python: >=3.11

@@ -1,0 +1,37 @@
+name: smoke_transport_cpp
+version: "1.0.0"
+description: |
+  ClimaCare-Risk C0 Tesseract B. Explicit advection-diffusion-decay smoke
+  transport with a hand-written discrete adjoint, in C++20 with OpenMP. Python
+  is only the mandatory Tesseract glue: the kernel and its transpose are
+  compiled from cpp/ at image build time and exposed through pybind11. This is
+  the real boundary with Tesseract A, which differentiates with PyTorch
+  autodiff instead.
+build_config:
+  target_platform: "native"
+  extra_packages:
+    - build-essential
+    - cmake
+    - python3-dev
+    - libgomp1
+  package_data:
+    - ["CMakeLists.txt", "/tesseract/cpp_build/CMakeLists.txt"]
+    - ["cpp/smoke_kernel.hpp", "/tesseract/cpp_build/cpp/smoke_kernel.hpp"]
+    - ["cpp/smoke_kernel.cpp", "/tesseract/cpp_build/cpp/smoke_kernel.cpp"]
+    - ["cpp/bindings.cpp", "/tesseract/cpp_build/cpp/bindings.cpp"]
+  custom_build_steps:
+    - >-
+      RUN cmake -S /tesseract/cpp_build -B /tmp/smoke_build
+      -DCMAKE_BUILD_TYPE=Release
+      -DPython_EXECUTABLE=/python-env/bin/python
+      && cmake --build /tmp/smoke_build -j 4
+      && cp /tmp/smoke_build/smoke_kernel_cpp*.so /tesseract/
+      && rm -rf /tmp/smoke_build
+env:
+  OMP_NUM_THREADS: "4"
+metadata:
+  slice: c0
+  role: smoke_transport
+  specification: docs/mathematical_specification.md#5
+  differentiation: hand-written-discrete-adjoint
+  language: c++20-openmp

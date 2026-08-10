@@ -1,0 +1,5 @@
+torch>=2.0
+numpy>=2.0
+pydantic>=2.0
+tesseract-core==1.11.0
+../../shared_code
