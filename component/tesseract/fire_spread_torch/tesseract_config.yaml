@@ -1,0 +1,18 @@
+name: fire_spread_torch
+version: "2.0.0"
+description: |
+  ClimaCare-Risk C0 Tesseract A. Coupled thermal-intensity and fuel wildfire
+  model in PyTorch on CPU, float64, explicit Euler with upwind advection and a
+  five-point Laplacian. Emits the full space-time smoke source consumed by the
+  C++ SmokeTransport Tesseract. Differentiated with PyTorch autodiff through
+  torch.func.vjp; abstract_eval is provided explicitly so JAX can trace it.
+build_config:
+  target_platform: "native"
+env:
+  OMP_NUM_THREADS: "4"
+  MKL_NUM_THREADS: "4"
+metadata:
+  slice: c0
+  role: fire_spread
+  specification: docs/mathematical_specification.md#4
+  differentiation: pytorch-autodiff
