@@ -1,3 +1,5 @@
+# In this code, we only put the function associated to risk calculation (VaR, CVaR...)
+
 from __future__ import annotations
 
 import jax
@@ -18,10 +20,10 @@ def expected_shortfall( # this is a CVaR optimisation based on Rockafellar-Uryas
     return jnp.asarray(zeta) + jnp.sum(tail) / scale
 
 def optimal_expected_shortfall(
-    losses: jax.Array,
-    alpha: float = 0.95,
-    tau: float = 10_000.0,
-    steps: int = 200, ) -> jax.Array:
+    losses : jax.Array,
+    alpha : float = 0.95,
+    tau : float = 10_000.0,
+    steps : int = 200, ) -> jax.Array:
     
     # Minimizes expected shortfall over zeta (strictly convex optimization in zeta)
     
@@ -33,3 +35,20 @@ def optimal_expected_shortfall(
         zeta = zeta - 0.5 * scale * grad_fn(zeta)
         
     return expected_shortfall(losses, zeta, alpha, tau)
+
+def value_at_risk_smooth(
+    losses : jax.Array,
+    alpha : float = 0.95,
+    tau : float = 10_000.0,
+    steps : int = 200, ) -> jax.Array:
+  
+    # Returns the optimal zeta threshold, serving as the smoothed VaR estimator
+
+    zeta = jnp.mean(losses)
+    grad_fn = jax.grad(lambda z : expected_shortfall(losses, z, alpha, tau)) # this is an automatic derivative of CVaR with respect to zeta
+    scale = jnp.maximum(jnp.std(losses), tau)
+    
+    for _ in range(steps):
+        zeta = zeta - 0.5 * scale * grad_fn(zeta)
+        
+    return zeta # The optimal zeta* at convergence is mathematically the smoothed VaR
