@@ -27,7 +27,7 @@ COST= {
     'max_insurance_payout' : 500000.0, # based on contracts of differents assurance (CCR, AXA CLIMATE...)
 }
 
-def total_loss(u, H_r, param = COST, fire_intensity, basis_noise = 0.0) :
+def total_loss(u, H_r, fire_intensity, basis_noise = 0.0, param = COST) :
 
     L_health = jnp.sum(H_r) * (1.0 - 0.5 * u[2]) * param['cost_per_admission']
     L_activity = param['base_activity_loss'] * fire_intensity * (1.0 - 0.4 * u[1])
@@ -71,7 +71,7 @@ def robust_objective(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar
     )(scenarios_H_r, scenarios_fire, basis_noises)
     
     el = jnp.mean(losses)
-    es = optimal_expected_shortfall(losses, prob=ALPHA_CVAR)
+    es = optimal_expected_shortfall(losses, alpha = ALPHA_CVAR)
     
     return el + lambda_cvar * es + budget_penalty + bounds_penalty
 
@@ -91,7 +91,7 @@ def optimize_portfolio(scenarios_H_r, scenarios_fire , basis_noises = None, lamb
         
     return u    
 
-def generate_efficient_frontier(scenarios_H_r, scenarios_fire, basis_noises = None, n_points) : # Computes the Pareto frontier (EL vs. CVaR) by sweeping through n_points values of lambda_cvar
+def generate_efficient_frontier(scenarios_H_r, scenarios_fire, n_points, basis_noises = None) : # Computes the Pareto frontier (EL vs. CVaR) by sweeping through n_points values of lambda_cvar
     # n_points : The number of optimal portfolios to compute along the frontier.
     if basis_noises is None:
         basis_noises = jnp.zeros_like(scenarios_fire)
