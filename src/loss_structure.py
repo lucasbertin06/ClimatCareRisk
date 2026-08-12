@@ -1,8 +1,16 @@
+from __future__ import annotations
+
 import jax
 import jax.numpy as jnp
 
+from risk import expected_shortfall, optimal_expected_shortfall, value_at_risk_smooth
+
 # L_tot = L_santé + L_activité + L_actifs + C_interventions - I_assurance
 # u = (u_fuel, u_sensor, u_filter, u_capacity, u_insurance, u_reserve)
+
+ALPHA_CVAR = 0.95
+BUDGET_MAX = 1_000_000.0
+SMOOTHING_TAU = 10_000.0
 
 COST= {
     'unit_costs': jnp.array([ # u
