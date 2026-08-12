@@ -36,8 +36,8 @@ def total_loss(u, H_r, param = COST, fire_intensity, basis_noise = 0.0) :
     
     brut_loss = L_health + L_activity + L_assets + C_interventions
 
-    index_reading = jnp.clip(fire_intensity + basis_noise, 0.0, 1.0)
-    trigger = jax.nn.sigmoid((index_reading - 0.6) / 0.05)
+    index_reading = jnp.clip(fire_intensity + basis_noise, 0.0, 1.0) # Basis risk handling: Account for noise between ground truth and satellite/weather index
+    trigger = jax.nn.sigmoid((index_reading - 0.6) / 0.05) # with a smooth sigmoid to ensure continuous differentiability for JAX (jax.grad)
     I_assurance = u[3] * param['max_insurance_payout'] * trigger
 
     reserve_available = u[4] * param['unit_costs'][4]
