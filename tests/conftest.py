@@ -9,7 +9,11 @@ separate pytest sessions (see the ``test`` target of the Makefile). Enabling
 from __future__ import annotations
 
 import shutil
+import sys
 from collections.abc import Iterator
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pytest
 from climacare.config import TinyConfig, load_tiny_config
