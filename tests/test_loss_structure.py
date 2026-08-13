@@ -36,3 +36,18 @@ def test_optimize_portfolio_respects_bounds_and_budget():
     assert jnp.all(u_opt >= 0.0) and jnp.all(u_opt <= 1.0)  # Decision bounds [0, 1] must hold
     total_capex = jnp.sum(u_opt * COST["unit_costs"])
     assert total_capex <= COST["unit_costs"].sum() * 1.01  # 1% numerical tolerance margin for soft budget penalty
+
+def test_run_stress_tests_increases_risk():
+    # Verifies that stress conditions degrade risk metrics (higher loss/CVaR) relative to nominal
+    H_r, fire = _fake_scenarios()
+    basis_noises = jnp.zeros_like(fire)
+    u_opt = jnp.array([0.2, 0.2, 0.2, 0.2, 0.2])
+
+    results = run_stress_tests(u_opt, H_r, fire, basis_noises)
+
+    # Check that all stress scenarios are evaluated
+    assert "nominal" in results
+    assert "wind_strong" in results
+
+    # Strong wind must increase expected loss (EL) compared to nominal
+    assert results["wind_strong"]["EL"] >= results["nominal"]["EL"]

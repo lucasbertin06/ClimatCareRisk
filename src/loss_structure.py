@@ -122,3 +122,16 @@ def apply_stress(kind, *, scenarios_fire, basis_noises, budget_max) : # it's a S
         return dict(scenarios_fire = scenarios_fire, basis_noises = basis_noises, budget_max = budget_max * 0.8)
     
     raise ValueError(f"unknown stress kind : {kind}")
+
+def run_stress_tests(u_opt, scenarios_H_r, scenarios_fire, basis_noises, budget_max = BUDGET_MAX) : # Evaluate a fixed optimal portfolio u_opt under stress scenarios without re-optimizing 
+    def metrics(fire, noises) :
+        losses = jax.vmap(lambda h, f, n: total_loss(u_opt, h, f, n))(scenarios_H_r, fire, noises)
+        el, _, es = compute_risk_metrics(losses)
+        return {"EL": el, "CVaR": es}
+
+    results = {"nominal": metrics(scenarios_fire, basis_noises)}
+
+    for kind in ["wind_strong", "sensor_biased", "budget_cut"] : # Stress testing across predefined perturbation kinds
+        s = apply_stress(kind, scenarios_fire = scenarios_fire, basis_noises = basis_noises, budget_max = budget_max)
+        results[kind] = metrics(s["scenarios_fire"], s["basis_noises"])
+    return results
