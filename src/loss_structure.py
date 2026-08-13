@@ -110,3 +110,15 @@ def generate_efficient_frontier(scenarios_H_r, scenarios_fire, n_points, basis_n
         frontier_es.append(es)
         
     return jnp.array(frontier_portfolios), jnp.array(frontier_el), jnp.array(frontier_es)
+
+def apply_stress(kind, *, scenarios_fire, basis_noises, budget_max) : # it's a Stress-Testing function, its objective is to verify the robustness of the optimal investment portfolio u* when subjected to unforeseen degradations
+    if kind == "wind_strong" : # intense fire
+        return dict(scenarios_fire = jnp.clip(scenarios_fire * 1.3, 0.0, 1.0), basis_noises = basis_noises, budget_max = budget_max) # jnp.clip only here to cap the intesity to 1.0 (100%)
+    
+    if kind == "sensor_biased" : # sensors systematically underestimate
+        return dict(scenarios_fire = scenarios_fire, basis_noises = basis_noises - 0.15, budget_max = budget_max)
+    
+    if kind == "budget_cut" : # -20% budget
+        return dict(scenarios_fire = scenarios_fire, basis_noises = basis_noises, budget_max = budget_max * 0.8)
+    
+    raise ValueError(f"unknown stress kind : {kind}")
