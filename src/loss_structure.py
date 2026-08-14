@@ -75,22 +75,25 @@ def robust_objective(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar
     
     return el + lambda_cvar * es + budget_penalty + bounds_penalty
 
+@jax.jit
 def optimize_portfolio(scenarios_H_r, scenarios_fire , basis_noises = None, lambda_cvar = 0.5, budget_max = BUDGET_MAX, lr = 0.01, steps = 300) : # finds the optimal protfolio u* by gradient descent with JAX .
     # lr : vitesse a laquelle la descente de gradient modifie u a chaque etape
     # steps : Nombre total d'itérations d'ajustement du portefeuille. À chaque itération, JAX calcule le gradient de J(u) et met à jour u   
     if basis_noises is None:
         basis_noises = jnp.zeros_like(scenarios_fire)
 
-    u = jnp.array([0.2, 0.2, 0.2, 0.2, 0.2])
-    grad_fn = jax.jit(jax.grad(robust_objective, argnums = 0))
+    u_init = jnp.array([0.2, 0.2, 0.2, 0.2, 0.2])
+    grad_fn = jax.grad(robust_objective, argnums = 0)
     
     def optimized_range(u, _) :
         grads = grad_fn(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar, budget_max)
         new_u = u - lr * grads
-        new_u = jnp.clip(u, 0.0, 1.0)
+        new_u = jnp.clip(new_u, 0.0, 1.0)
         return new_u, None # we don't want the 300 proofs, only the optimized u*
         
-    final_u = jax.lax.scan(step_fn, u_init, xs = None, length = steps)    
+    final_u, v = jax.lax.scan(optimized_range, u_init, xs = None, length = steps)    
+
+    return final_u
 
 def generate_efficient_frontier(scenarios_H_r, scenarios_fire, n_points, basis_noises = None) : # Computes the Pareto frontier (EL vs. CVaR) by sweeping through n_points values of lambda_cvar
     # n_points : The number of optimal portfolios to compute along the frontier.
