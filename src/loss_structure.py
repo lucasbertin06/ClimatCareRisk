@@ -155,7 +155,7 @@ def evaluate_smart_criterion(u_opt, scenarios_H_r, scenarios_fire, basis_noises,
 
     cvar_opt = compute_cvar(u_opt)
     cvar_uniform = compute_cvar(policy_uniform(budget_max = budget_max))
-    cvar_insurance = compute_cvar(policy_insurance_only(budget_max = budget_max))
+    cvar_insurance = compute_cvar(policy_insurance(budget_max = budget_max))
 
     # Compute percentage reduction relative to baselines
     reduction_vs_uniform = (cvar_uniform - cvar_opt) / cvar_uniform
