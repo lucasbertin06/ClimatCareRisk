@@ -136,14 +136,14 @@ def run_stress_tests(u_opt, scenarios_H_r, scenarios_fire, basis_noises, budget_
         results[kind] = metrics(s["scenarios_fire"], s["basis_noises"])
     return results
 
-def policy_uniform(n_levers = 5, budget_max = BUDGET_MAX) : # it's an equivalent repartition
-    return jnp.full((n_levers,), budget_max / n_levers) # it ensures the sum of lever costs stays within budget_max constraint
+def policy_uniform(n_levers = 5) : # it's an equivalent repartition
+    return jnp.full((n_levers,), 1.0 / n_levers) # it ensures the sum of lever costs stays within budget_max constraint
 
-def policy_insurance(n_levers = 5, insurance_idx = 0, budget_max = BUDGET_MAX) : # we based the budget on insurance 
+def policy_insurance(n_levers = 5, insurance_idx = 3) : # we based the budget on insurance 
     u = jnp.zeros(n_levers)
-    return u.at[insurance_idx].set(budget_max)
+    return u.at[insurance_idx].set(1.0)
 
-def evaluate_smart_criterion(u_opt, scenarios_H_r, scenarios_fire, basis_noises, budget_max = BUDGET_MAX) : # implementaiton point 10.3 du pdf, we compare the baseline with the optimized portfolio
+def evaluate_smart_criterion(u_opt, scenarios_H_r, scenarios_fire, basis_noises) : # implementaiton point 10.3 du pdf, we compare the baseline with the optimized portfolio
     # Evaluates portfolio reduction against SMART criteria (se baser sur le pdf page 6)
 
     # this is where the comparison starts
@@ -154,8 +154,8 @@ def evaluate_smart_criterion(u_opt, scenarios_H_r, scenarios_fire, basis_noises,
         return cvar
 
     cvar_opt = compute_cvar(u_opt)
-    cvar_uniform = compute_cvar(policy_uniform(budget_max = budget_max))
-    cvar_insurance = compute_cvar(policy_insurance(budget_max = budget_max))
+    cvar_uniform = compute_cvar(policy_uniform())
+    cvar_insurance = compute_cvar(policy_insurance())
 
     # Compute percentage reduction relative to baselines
     reduction_vs_uniform = (cvar_uniform - cvar_opt) / cvar_uniform
