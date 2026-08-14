@@ -135,3 +135,37 @@ def run_stress_tests(u_opt, scenarios_H_r, scenarios_fire, basis_noises, budget_
         s = apply_stress(kind, scenarios_fire = scenarios_fire, basis_noises = basis_noises, budget_max = budget_max)
         results[kind] = metrics(s["scenarios_fire"], s["basis_noises"])
     return results
+
+def policy_uniform(n_levers = 5, budget_max = BUDGET_MAX) : # it's an equivalent repartition
+    return jnp.full((n_levers,), budget_max / n_levers) # it ensures the sum of lever costs stays within budget_max constraint
+
+def policy_insurance(n_levers = 5, insurance_idx = 0, budget_max = BUDGET_MAX) : # we based the budget on insurance 
+    u = jnp.zeros(n_levers)
+    return u.at[insurance_idx].set(budget_max)
+
+def evaluate_smart_criterion(u_opt, scenarios_H_r, scenarios_fire, basis_noises, budget_max = BUDGET_MAX) : # implementaiton point 10.3 du pdf, we compare the baseline with the optimized portfolio
+    # Evaluates portfolio reduction against SMART criteria (se baser sur le pdf page 6)
+
+    # this is where the comparison starts
+
+    def compute_cvar(u) :
+        losses = jax.vmap(lambda h, f, n: total_loss(u, h, f, n))(scenarios_H_r, scenarios_fire, basis_noises)
+        _, _, cvar = compute_risk_metrics(losses)
+        return cvar
+
+    cvar_opt = compute_cvar(u_opt)
+    cvar_uniform = compute_cvar(policy_uniform(budget_max = budget_max))
+    cvar_insurance = compute_cvar(policy_insurance_only(budget_max = budget_max))
+
+    # Compute percentage reduction relative to baselines
+    reduction_vs_uniform = (cvar_uniform - cvar_opt) / cvar_uniform
+    reduction_vs_insurance = (cvar_insurance - cvar_opt) / cvar_insurance
+
+    return {
+        "cvar_opt" : cvar_opt,
+        "cvar_uniform" : cvar_uniform,
+        "cvar_insurance" : cvar_insurance,
+        "reduction_vs_uniform" : reduction_vs_uniform,
+        "reduction_vs_insurance" : reduction_vs_insurance,
+        "smart_target_met" : (reduction_vs_uniform >= 0.20) and (reduction_vs_insurance >= 0.20), # TRUE only if the optimization reduce risk by 20% compared to the 2 baselines
+    }
