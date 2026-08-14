@@ -84,12 +84,13 @@ def optimize_portfolio(scenarios_H_r, scenarios_fire , basis_noises = None, lamb
     u = jnp.array([0.2, 0.2, 0.2, 0.2, 0.2])
     grad_fn = jax.jit(jax.grad(robust_objective, argnums = 0))
     
-    for i in range(steps):
+    def optimized_range(u, _) :
         grads = grad_fn(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar, budget_max)
-        u = u - lr * grads
-        u = jnp.clip(u, 0.0, 1.0)
+        new_u = u - lr * grads
+        new_u = jnp.clip(u, 0.0, 1.0)
+        return new_u, None # we don't want the 300 proofs, only the optimized u*
         
-    return u    
+    final_u = jax.lax.scan(step_fn, u_init, xs = None, length = steps)    
 
 def generate_efficient_frontier(scenarios_H_r, scenarios_fire, n_points, basis_noises = None) : # Computes the Pareto frontier (EL vs. CVaR) by sweeping through n_points values of lambda_cvar
     # n_points : The number of optimal portfolios to compute along the frontier.
