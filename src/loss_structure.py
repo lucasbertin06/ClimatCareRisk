@@ -75,21 +75,25 @@ def robust_objective(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar
     
     return el + lambda_cvar * es + budget_penalty + bounds_penalty
 
+@jax.jit
 def optimize_portfolio(scenarios_H_r, scenarios_fire , basis_noises = None, lambda_cvar = 0.5, budget_max = BUDGET_MAX, lr = 0.01, steps = 300) : # finds the optimal protfolio u* by gradient descent with JAX .
     # lr : vitesse a laquelle la descente de gradient modifie u a chaque etape
     # steps : Nombre total d'itérations d'ajustement du portefeuille. À chaque itération, JAX calcule le gradient de J(u) et met à jour u   
     if basis_noises is None:
         basis_noises = jnp.zeros_like(scenarios_fire)
 
-    u = jnp.array([0.2, 0.2, 0.2, 0.2, 0.2])
-    grad_fn = jax.jit(jax.grad(robust_objective, argnums = 0))
+    u_init = jnp.array([0.2, 0.2, 0.2, 0.2, 0.2])
+    grad_fn = jax.grad(robust_objective, argnums = 0)
     
-    for i in range(steps):
+    def optimized_range(u, _) :
         grads = grad_fn(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar, budget_max)
-        u = u - lr * grads
-        u = jnp.clip(u, 0.0, 1.0)
+        new_u = u - lr * grads
+        new_u = jnp.clip(new_u, 0.0, 1.0)
+        return new_u, None # we don't want the 300 proofs, only the optimized u*
         
-    return u    
+    final_u, v = jax.lax.scan(optimized_range, u_init, xs = None, length = steps)    
+
+    return final_u
 
 def generate_efficient_frontier(scenarios_H_r, scenarios_fire, n_points, basis_noises = None) : # Computes the Pareto frontier (EL vs. CVaR) by sweeping through n_points values of lambda_cvar
     # n_points : The number of optimal portfolios to compute along the frontier.
@@ -135,3 +139,37 @@ def run_stress_tests(u_opt, scenarios_H_r, scenarios_fire, basis_noises, budget_
         s = apply_stress(kind, scenarios_fire = scenarios_fire, basis_noises = basis_noises, budget_max = budget_max)
         results[kind] = metrics(s["scenarios_fire"], s["basis_noises"])
     return results
+
+def policy_uniform(n_levers = 5) : # it's an equivalent repartition
+    return jnp.full((n_levers,), 1.0 / n_levers) # it ensures the sum of lever costs stays within budget_max constraint
+
+def policy_insurance(n_levers = 5, insurance_idx = 3) : # we based the budget on insurance 
+    u = jnp.zeros(n_levers)
+    return u.at[insurance_idx].set(1.0)
+
+def evaluate_smart_criterion(u_opt, scenarios_H_r, scenarios_fire, basis_noises) : # implementaiton point 10.3 du pdf, we compare the baseline with the optimized portfolio
+    # Evaluates portfolio reduction against SMART criteria (se baser sur le pdf page 6)
+
+    # this is where the comparison starts
+
+    def compute_cvar(u) :
+        losses = jax.vmap(lambda h, f, n: total_loss(u, h, f, n))(scenarios_H_r, scenarios_fire, basis_noises)
+        _, _, cvar = compute_risk_metrics(losses)
+        return cvar
+
+    cvar_opt = compute_cvar(u_opt)
+    cvar_uniform = compute_cvar(policy_uniform())
+    cvar_insurance = compute_cvar(policy_insurance())
+
+    # Compute percentage reduction relative to baselines
+    reduction_vs_uniform = (cvar_uniform - cvar_opt) / cvar_uniform
+    reduction_vs_insurance = (cvar_insurance - cvar_opt) / cvar_insurance
+
+    return {
+        "cvar_opt" : cvar_opt,
+        "cvar_uniform" : cvar_uniform,
+        "cvar_insurance" : cvar_insurance,
+        "reduction_vs_uniform" : reduction_vs_uniform,
+        "reduction_vs_insurance" : reduction_vs_insurance,
+        "smart_target_met" : (reduction_vs_uniform >= 0.20) and (reduction_vs_insurance >= 0.20), # TRUE only if the optimization reduce risk by 20% compared to the 2 baselines
+    }
