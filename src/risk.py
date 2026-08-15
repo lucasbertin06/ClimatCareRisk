@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from climacare.finance import smooth_plus, conditional_value_at_risk
+from climacare.finance import smooth_plus, 
 
 __all__ = ["expected_shortfall", "optimal_expected_shortfall", "value_at_risk_smooth"]
 
@@ -49,6 +49,6 @@ def value_at_risk_smooth(
     losses : jax.Array,
     alpha : float = 0.95,
     tau : float = 10_000.0,
-    steps : int = 200, ) -> jax.Array:
+    steps : int = 10, ) -> jax.Array:
 
     return optimal_zeta(losses, alpha, tau, steps) # The optimal zeta* at convergence is mathematically the smoothed VaR
