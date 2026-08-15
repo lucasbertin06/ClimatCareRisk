@@ -3,7 +3,7 @@ import jax.numpy as jnp
 
 from climacare.health import HealthZone, mean_exposure, incremental_health_impact
 
-all = ["HealthZone", "mean_exposure", "incremental_health_impact", "health_impact"]
+__all__ = ["HealthZone", "mean_exposure", "incremental_health_impact", "health_impact"]
 
 def health_impact(concentration_scenarios, zones, *, dt, cell_area, filter_level = 0.0) : # Compute hospital admission impacts across all scenarios and health zones
     # concentration_scenarios : it's an array of shape (n_scenarios, n_levels, ny, nx)
@@ -14,7 +14,7 @@ def health_impact(concentration_scenarios, zones, *, dt, cell_area, filter_level
 
     # To sum up : it converts smoke concentration fields into quantified health impacts
 
-    def per_scenario(concentration):  # une seule concentration (n_levels, ny, nx)
+    def per_scenario(concentration) : # une seule concentration (n_levels, ny, nx)
         impacts = []
         for zone in zones:
             e_r = mean_exposure(concentration, zone, dt = dt, cell_area = cell_area, filter_level = filter_level)
