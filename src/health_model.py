@@ -1,6 +1,9 @@
+import jax
+import jax.numpy as jnp
+
 from climacare.health import HealthZone, mean_exposure, incremental_health_impact
 
-all = ["HealthZone", "mean_exposure", "incremental_health_impact"]
+all = ["HealthZone", "mean_exposure", "incremental_health_impact", "health_impact"]
 
 def health_impact(concentration_scenarios, zones, *, dt, cell_area, filter_level = 0.0) : # Compute hospital admission impacts across all scenarios and health zones
     # concentration_scenarios : it's an array of shape (n_scenarios, n_levels, ny, nx)
@@ -11,16 +14,13 @@ def health_impact(concentration_scenarios, zones, *, dt, cell_area, filter_level
 
     # To sum up : it converts smoke concentration fields into quantified health impacts
 
-    C_eff = concentration_scenarios / (1.0 - filter_level)
+    def per_scenario(concentration):  # une seule concentration (n_levels, ny, nx)
+        impacts = []
+        for zone in zones:
+            e_r = mean_exposure(concentration, zone, dt = dt, cell_area = cell_area, filter_level = filter_level)
+            dH_r = incremental_health_impact(e_r, zone, cell_area)
+            impacts.append(dH_r)
+        return jnp.stack(impacts)  # (n_zones,)
 
-    zone_masks = jnp.stack([z.mask for z in zones]) # stack is great to pass from 2D to 3D : (n_zones, ny, nx)
+    return jax.vmap(per_scenario)(concentration_scenarios)  # (n_scenarios, n_zones)
 
-    pop_grid = zones[0].pop_grid # (ny, nx)
-    
-    exposure = jnp.einsum('styx, ryx, yx -> sr', C_eff, zone_masks, pop_grid)
-
-    # sanitary impact per zone and scenario
-    baseline_rates = jnp.array([z.baseline_rate for z in zones])
-    hospital_impact = exposure * baseline_rates
-
-    return hospital_impact
