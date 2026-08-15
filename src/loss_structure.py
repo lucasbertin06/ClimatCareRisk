@@ -63,9 +63,6 @@ def robust_objective(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar
     # penalties
     total_capex = jnp.sum(u * param['unit_costs'])
     budget_penalty = 1e6 * jnp.square(jnp.maximum(0.0, total_capex - budget_max))
-
-    # penalties if we go over budget
-    bounds_penalty = 1e6 * jnp.sum(jnp.square(jnp.maximum(0.0, -u)) + jnp.square(jnp.maximum(0.0, u - 1.0)))
     
     # Évaluation vectorisée sur l'ensemble des scénarios
     losses = jax.vmap(
@@ -75,7 +72,7 @@ def robust_objective(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar
     el = jnp.mean(losses)
     es = optimal_expected_shortfall(losses, alpha = ALPHA_CVAR)
     
-    return el + lambda_cvar * es + budget_penalty + bounds_penalty
+    return el + lambda_cvar * es + budget_penalty 
 
 @jax.jit
 def optimize_portfolio(scenarios_H_r, scenarios_fire , basis_noises = None, lambda_cvar = 0.5, budget_max = BUDGET_MAX, lr = 0.01, steps = 300) : # finds the optimal protfolio u* by gradient descent with JAX .
