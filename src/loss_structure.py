@@ -96,23 +96,27 @@ def optimize_portfolio(scenarios_H_r, scenarios_fire , basis_noises = None, lamb
 
 def generate_efficient_frontier(scenarios_H_r, scenarios_fire, n_points, basis_noises = None) : # Computes the Pareto frontier (EL vs. CVaR) by sweeping through n_points values of lambda_cvar
     # n_points : The number of optimal portfolios to compute along the frontier.
-    if basis_noises is None:
+    if basis_noises is None :
         basis_noises = jnp.zeros_like(scenarios_fire)
-        
+
     lambdas = jnp.linspace(0.0, 2.0, n_points)
-    frontier_portfolios, frontier_el, frontier_es = [], [], []
-    
-    for lmbda in lambdas:
-        u_opt = optimize_portfolio(scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar = lmbda)
-        
-        losses = jax.vmap(lambda h, f, n: total_loss(u_opt, h, f, n))(scenarios_H_r, scenarios_fire, basis_noises)
-        el, _, es = compute_risk_metrics(losses)
-        
-        frontier_portfolios.append(u_opt)
-        frontier_el.append(el)
-        frontier_es.append(es)
-        
-    return jnp.array(frontier_portfolios), jnp.array(frontier_el), jnp.array(frontier_es)
+
+    # maintenant : vmap sur lambda_cvar uniquement, un seul appel
+    # compile qui traite les n_points portefeuilles en parallele. scenarios_H_r/scenarios_fire/
+    # basis_noises restent fixes (in_axes=None), seul lambda_cvar varie (in_axes=0)
+    portfolios = jax.vmap(
+        lambda l: optimize_portfolio(scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar = l),
+        in_axes = 0, )(lambdas)  # shape (n_points, n_levers)
+
+    def eval_metrics(u) :
+        losses = jax.vmap(lambda h, f, n: total_loss(u, h, f, n))(scenarios_H_r, scenarios_fire, basis_noises)
+        el = jnp.mean(losses)
+        es = optimal_expected_shortfall(losses, alpha = ALPHA_CVAR)
+        return el, es
+
+    frontier_el, frontier_es = jax.vmap(eval_metrics)(portfolios)  # same logic : one call instead of n_points
+
+    return portfolios, frontier_el, frontier_es
 
 def apply_stress(kind, *, scenarios_fire, basis_noises, budget_max) : # it's a Stress-Testing function, its objective is to verify the robustness of the optimal investment portfolio u* when subjected to unforeseen degradations
     if kind == "wind_strong" : # intense fire
