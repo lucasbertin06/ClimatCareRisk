@@ -37,7 +37,9 @@ def total_loss(u, H_r, fire_intensity, basis_noise = 0.0, param = COST) :
     brut_loss = L_health + L_activity + L_assets + C_interventions
 
     index_reading = jnp.clip(fire_intensity + basis_noise, 0.0, 1.0) # Basis risk handling: Account for noise between ground truth and satellite/weather index
-    trigger = jax.nn.sigmoid((index_reading - 0.6) / 0.05) # with a smooth sigmoid to ensure continuous differentiability for JAX (jax.grad)
+    temp = param.get('trigger_temperature', 0.15) # temp = 0.15 instead of 0.05 so the gradients can propagate on the interval [0.4; 0.8]
+    trigger = jax.nn.sigmoid((index_reading - 0.6) / temp) # with a smooth sigmoid to ensure continuous differentiability for JAX (jax.grad)
+    
     I_assurance = u[3] * param['max_insurance_payout'] * trigger
 
     reserve_available = u[4] * param['unit_costs'][4]
