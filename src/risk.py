@@ -19,21 +19,30 @@ def expected_shortfall( # this is a CVaR optimisation based on Rockafellar-Uryas
     scale = (1.0 - alpha) * losses.shape[0]
     return jnp.asarray(zeta) + jnp.sum(tail) / scale
 
+def optimal_zeta( # finds the zeta* who minimize expected_shortfall(losses, zeta).
+    losses : jax.Array,
+    alpha : float = 0.95,
+    tau : float = 10_000.0,
+    steps : int = 10, ) -> jax.Array:
+
+    zeta0 = jnp.quantile(losses, alpha)  # starting point already not far from the solution
+    scale = jnp.maximum(jnp.std(losses), tau)
+    grad_fn = jax.grad(lambda z: expected_shortfall(losses, z, alpha, tau))
+
+    def body(_, zeta):
+        return zeta - 0.5 * scale * grad_fn(zeta)
+
+    return jax.lax.fori_loop(0, steps, body, zeta0)
+
 def optimal_expected_shortfall(
     losses : jax.Array,
     alpha : float = 0.95,
     tau : float = 10_000.0,
-    steps : int = 200, ) -> jax.Array:
+    steps : int = 10, ) -> jax.Array:
     
     # Minimizes expected shortfall over zeta (strictly convex optimization in zeta)
     
-    zeta = jnp.mean(losses)
-    grad_fn = jax.grad(lambda z : expected_shortfall(losses, z, alpha, tau))
-    scale = jnp.maximum(jnp.std(losses), tau)
-    
-    for _ in range(steps):
-        zeta = zeta - 0.5 * scale * grad_fn(zeta)
-        
+    zeta = optimal_zeta(losses, alpha, tau, steps)
     return expected_shortfall(losses, zeta, alpha, tau)
 
 def value_at_risk_smooth(
@@ -41,14 +50,5 @@ def value_at_risk_smooth(
     alpha : float = 0.95,
     tau : float = 10_000.0,
     steps : int = 200, ) -> jax.Array:
-  
-    # Returns the optimal zeta threshold, serving as the smoothed VaR estimator
 
-    zeta = jnp.mean(losses)
-    grad_fn = jax.grad(lambda z : expected_shortfall(losses, z, alpha, tau)) # this is an automatic derivative of CVaR with respect to zeta
-    scale = jnp.maximum(jnp.std(losses), tau)
-    
-    for _ in range(steps):
-        zeta = zeta - 0.5 * scale * grad_fn(zeta)
-        
-    return zeta # The optimal zeta* at convergence is mathematically the smoothed VaR
+    return optimal_zeta(losses, alpha, tau, steps) # The optimal zeta* at convergence is mathematically the smoothed VaR
