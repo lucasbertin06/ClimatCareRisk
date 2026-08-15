@@ -29,7 +29,7 @@ COST= {
 
 def total_loss(u, H_r, fire_intensity, basis_noise = 0.0, param = COST) :
 
-    L_health = jnp.sum(H_r) * (1.0 - 0.5 * u[2]) * param['cost_per_admission']
+    L_health = jnp.sum(H_r, -1) * (1.0 - 0.5 * u[2]) * param['cost_per_admission'] # added -1 to jnp.sum so we only add the last dimension of the array
     L_activity = param['base_activity_loss'] * fire_intensity * (1.0 - 0.4 * u[1])
     L_assets = param['base_assets_loss'] * fire_intensity * (1.0 - 0.5 * u[0])
     C_interventions = param['intervention_cost'] * fire_intensity
