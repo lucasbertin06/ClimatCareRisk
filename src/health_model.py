@@ -20,7 +20,7 @@ def health_impact(concentration_scenarios, zones, *, dt, cell_area, filter_level
             e_r = mean_exposure(concentration, zone, dt = dt, cell_area = cell_area, filter_level = filter_level)
             dH_r = incremental_health_impact(e_r, zone, cell_area)
             impacts.append(dH_r)
-        return jnp.stack(impacts)  # (n_zones,)
+        return jnp.stack(impacts) # (n_zones,)
 
-    return jax.vmap(per_scenario)(concentration_scenarios)  # (n_scenarios, n_zones)
+    return jax.vmap(per_scenario)(concentration_scenarios) # (n_scenarios, n_zones)
 
