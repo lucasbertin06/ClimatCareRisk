@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from climacare.finance import smooth_plus, 
+from climacare.finance import smooth_plus
 
 __all__ = ["expected_shortfall", "optimal_expected_shortfall", "value_at_risk_smooth"]
 
