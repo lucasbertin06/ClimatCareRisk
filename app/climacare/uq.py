@@ -14,29 +14,37 @@ from climacare.pipeline import TesseractPipeline
 
 def probabilistic_model( # y = G(theta) + noise, Allows fixing certain parameters
     pipeline: TesseractPipeline,
-    observations: Observations,
-    fixed_theta: jnp.ndarray = None,
-    free_indices: tuple = (0, 1, 2, 3),
+    observations: Observations, # Structure containing field data collected from sensors
+    fixed_theta: jnp.ndarray = None, 
+    free_indices: tuple = (0, 1, 2, 3), 
 ) :
 
     # we have : y = G(θ, u) + ε, ε ∼ N (0, Σ) 
 
-    if bounds is None : 
-        bounds = {
-            "x0": (0.0, 100.0),       # Ignition x-position (km)
-            "y0": (0.0, 100.0),       # Ignition y-position (km)
-            "wind_bias": (-2.0, 2.0), # Wind speed/direction bias
-            "intensity": (0.5, 5.0)   # Fire intensity multiplier
-        }
+    config = pipeline.config # Extract global configuration from pipeline
+    priors = config.priors # Extract prior distribution hyperparameters (means, stds)
+    low, high = config.position_bounds # Extract grid spatial bounds [min, max]
 
-    x0 = numpyro.sample("x0", dist.Uniform(bounds["x0"][0], bounds["x0"][1])) # this is for the before we take the captors datas
-    y0 = numpyro.sample("y0", dist.Uniform(bounds["y0"][0], bounds["y0"][1]))
-    wind_bias = numpyro.sample("wind_bias", dist.Uniform(bounds["wind_bias"][0], bounds["wind_bias"][1]))
-    intensity = numpyro.sample("intensity", dist.Uniform(bounds["intensity"][0], bounds["intensity"][1]))
+    components = [] # to reconstruct the theta vector 
 
-    theta = { # Parameter bundle of θ
-        "x0": x0,
-        "y0": y0,
-        "wind_bias": wind_bias,
-        "intensity": intensity
-    }
+    for i, name in enumerate(PARAMETER_NAMES) :  
+        if i not in free_indices:  #
+            components.append(fixed_theta[i]) # Keep constant value for fixed parameter
+        elif name in ("x0", "y0") : 
+            components.append(numpyro.sample(name, dist.Uniform(low, high))) # Uninformative uniform prior
+        elif name == "log_amplitude" : # Case for smoke emission intensity (log scale)
+            components.append(numpyro.sample(name, dist.Normal(priors.log_amplitude_mean, priors.log_amplitude_std),
+                )
+            )
+        elif name == "delta_phi" :  # Case for wind direction correction/deviation
+            components.append(numpyro.sample(name, dist.Normal(0.0, priors.delta_phi_std))) # Sample according to Normal prior centered at zero
+           
+    theta = jnp.stack(components) # Stack 4 scalars to form the JAX theta vector
+    predictions = pipeline.sensor_predictions(theta) # Simulate the direct physical model
+
+    sigma = jnp.asarray(observations.noise_std) # Convert sensor noise standard deviation to JAX array
+    numpyro.sample(  # Define likelihood p(y|theta) comparing simulation and observations
+        "obs", 
+        dist.Normal(predictions, sigma),  
+        obs = jnp.asarray(observations.values), # Fix actual field observations measured by sensors
+    )
