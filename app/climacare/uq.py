@@ -50,17 +50,17 @@ def probabilistic_model( # y = G(theta) + noise, Allows fixing certain parameter
     )
 
 def laplace_approx(
-    pipeline : TesseractPipeline, # Physical pipeline instance
-    observations : Observations, # Actual sensor measurements
+    pipeline : TesseractPipeline, 
+    observations : Observations, 
     theta_map : jnp.ndarray, # Optimal point previously found by MAP algorithm (theta_MAP)
     jitter : float = 1e-8, # Regularization term to prevent division by zero
-) -> dict : # Returns a dictionary containing covariance and uncertainties
+) -> dict : 
     
     loss_fn = make_physical_loss(pipeline, observations) # Create deterministic loss function L(theta)
     hessian_fn = jax.hessian(loss_fn) # Generate JAX function computing matrix of second derivatives (Hessian)
 
-    theta = jnp.asarray(theta_map, dtype=jnp.float64)  # Ensure theta_MAP is in float64 JAX format
-    H = hessian_fn(theta)  # Evaluate Hessian matrix H exactly at MAP optimum point theta_MAP
+    theta = jnp.asarray(theta_map, dtype = jnp.float64) # Ensure theta_MAP is in float64 JAX format
+    H = hessian_fn(theta) # Evaluate Hessian matrix H exactly at MAP optimum point theta_MAP
 
     H_stable = H + jitter * jnp.eye(H.shape[0]) # Add small identity matrix (H + jitter * I)
     covariance = jnp.linalg.inv(H_stable) # Invert Hessian to get covariance (Sigma = H^-1)
@@ -71,3 +71,28 @@ def laplace_approx(
         "covariance": covariance, # Estimated 4x4 covariance matrix
         "std_dev": std_dev, # Standard deviation (uncertainty) for each parameter
     }
+
+def run_nuts(
+    pipeline: TesseractPipeline,
+    observations: Observations, 
+    theta_map: jnp.ndarray,  
+    rng_key: jax.Array,  # JAX random key for MCMC sampling
+    free_indices: tuple = (0, 1),  # Default: sample only x0 (index 0) and y0 (index 1)
+    num_warmup: int = 200, # Number of warmup/burn-in steps to adapt simulation step size
+    num_samples: int = 400, # Number of retained samples for posterior distribution
+) -> dict :  # Returns a dictionary containing MCMC chain draws
+    def model() : 
+        probabilistic_model( # Call probabilistic model while restricting parameters
+            pipeline, # Pass physical pipeline
+            observations, # Pass observations
+            fixed_theta = theta_map, # Fix non-sampled parameters to their MAP values
+            free_indices = free_indices, # Specify which parameters remain random variables
+        )
+
+    kernel = NUTS(model)  # Initialize No-U-Turn Sampler MCMC algorithm
+    mcmc = MCMC(  # Configure MCMC execution engine
+        kernel, num_warmup = num_warmup, num_samples = num_samples, progress_bar = False  # Execution parameters
+    )
+    mcmc.run(rng_key)  # Run MCMC simulation chain with JAX random key
+
+    return mcmc.get_samples()  # Return dictionary containing samples drawn from posterior
