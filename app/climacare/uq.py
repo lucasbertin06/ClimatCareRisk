@@ -13,10 +13,10 @@ from climacare.objective import Observations
 from climacare.pipeline import TesseractPipeline
 
 def probabilistic_model( # y = G(theta) + noise, Allows fixing certain parameters
-    pipeline: TesseractPipeline,
-    observations: Observations, # Structure containing field data collected from sensors
-    fixed_theta: jnp.ndarray = None, 
-    free_indices: tuple = (0, 1, 2, 3), 
+    pipeline : TesseractPipeline,
+    observations : Observations, # Structure containing field data collected from sensors
+    fixed_theta : jnp.ndarray = None, 
+    free_indices : tuple = (0, 1, 2, 3), 
 ) :
 
     # we have : y = G(θ, u) + ε, ε ∼ N (0, Σ) 
@@ -48,3 +48,26 @@ def probabilistic_model( # y = G(theta) + noise, Allows fixing certain parameter
         dist.Normal(predictions, sigma),  
         obs = jnp.asarray(observations.values), # Fix actual field observations measured by sensors
     )
+
+def laplace_approx(
+    pipeline : TesseractPipeline, # Physical pipeline instance
+    observations : Observations, # Actual sensor measurements
+    theta_map : jnp.ndarray, # Optimal point previously found by MAP algorithm (theta_MAP)
+    jitter : float = 1e-8, # Regularization term to prevent division by zero
+) -> dict : # Returns a dictionary containing covariance and uncertainties
+    
+    loss_fn = make_physical_loss(pipeline, observations) # Create deterministic loss function L(theta)
+    hessian_fn = jax.hessian(loss_fn) # Generate JAX function computing matrix of second derivatives (Hessian)
+
+    theta = jnp.asarray(theta_map, dtype=jnp.float64)  # Ensure theta_MAP is in float64 JAX format
+    H = hessian_fn(theta)  # Evaluate Hessian matrix H exactly at MAP optimum point theta_MAP
+
+    H_stable = H + jitter * jnp.eye(H.shape[0]) # Add small identity matrix (H + jitter * I)
+    covariance = jnp.linalg.inv(H_stable) # Invert Hessian to get covariance (Sigma = H^-1)
+    std_dev = jnp.sqrt(jnp.diag(covariance)) # Extract square root of diagonal to get standard deviations
+
+    return { 
+        "theta_map": theta_map, # Estimated MAP values
+        "covariance": covariance, # Estimated 4x4 covariance matrix
+        "std_dev": std_dev, # Standard deviation (uncertainty) for each parameter
+    }
