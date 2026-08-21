@@ -89,10 +89,10 @@ def run_nuts(
             free_indices = free_indices, # Specify which parameters remain random variables
         )
 
-    kernel = NUTS(model)  # Initialize No-U-Turn Sampler MCMC algorithm
-    mcmc = MCMC(  # Configure MCMC execution engine
-        kernel, num_warmup = num_warmup, num_samples = num_samples, progress_bar = False  # Execution parameters
+    kernel = NUTS(model) # Initialize No-U-Turn Sampler MCMC algorithm
+    mcmc = MCMC( # Configure MCMC execution engine
+        kernel, num_warmup = num_warmup, num_samples = num_samples, progress_bar = False # Execution parameters
     )
-    mcmc.run(rng_key)  # Run MCMC simulation chain with JAX random key
+    mcmc.run(rng_key) # Run MCMC simulation chain with JAX random key
 
-    return mcmc.get_samples()  # Return dictionary containing samples drawn from posterior
+    return mcmc.get_samples() # Return dictionary containing samples drawn from posterior
