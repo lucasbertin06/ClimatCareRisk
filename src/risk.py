@@ -25,8 +25,8 @@ def optimal_zeta( # finds the zeta* who minimize expected_shortfall(losses, zeta
     tau : float = 10_000.0,
     steps : int = 10, ) -> jax.Array:
 
-    zeta0 = jnp.quantile(losses, alpha)  # starting point already not far from the solution
-    scale = jnp.maximum(jnp.std(losses), tau)
+    zeta0 = jax.lax.stop_gradient(jnp.quantile(losses, alpha)) # quantile subgradient is 0/0 (=NaN) when losses are tied (all zero after full coverage), and we only need it as a starting point
+    scale = jax.lax.stop_gradient(jnp.maximum(jnp.std(losses), tau)) # same for std, it only sizes the refinement step, no gradient needed through it
     grad_fn = jax.grad(lambda z: expected_shortfall(losses, z, alpha, tau))
 
     def body(_, zeta):
