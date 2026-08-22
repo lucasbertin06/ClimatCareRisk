@@ -86,6 +86,7 @@ def optimize_portfolio(scenarios_H_r, scenarios_fire , basis_noises = None, lamb
     
     def optimized_range(u, _) :
         grads = grad_fn(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar, budget_max)
+        grads = grads / jnp.maximum(jnp.max(jnp.abs(grads)), 1e-12) # normalize by inf-norm, J is in currency scale (~1e6) so raw gradients diverge to NaN
         new_u = u - lr * grads
         new_u = jnp.clip(new_u, 0.0, 1.0)
         return new_u, None # we don't want the 300 proofs, only the optimized u*
