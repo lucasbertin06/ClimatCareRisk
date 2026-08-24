@@ -25,8 +25,12 @@ def optimal_zeta( # finds the zeta* who minimize expected_shortfall(losses, zeta
     tau : float = 10_000.0,
     steps : int = 10, ) -> jax.Array:
 
-    zeta0 = jax.lax.stop_gradient(jnp.quantile(losses, alpha)) # quantile subgradient is 0/0 (=NaN) when losses are tied (all zero after full coverage), and we only need it as a starting point
-    scale = jax.lax.stop_gradient(jnp.maximum(jnp.std(losses), tau)) # same for std, it only sizes the refinement step, no gradient needed through it
+    # stop_gradient : jnp.quantile's subgradient is 0/0 (NaN) when many losses
+    # are tied (e.g. all-zero after full insurance coverage). Same for std.
+    # Both only size the refinement step - no gradient is needed through them;
+    # the true CVaR gradient flows through expected_shortfall's smoothed hinge.
+    zeta0 = jax.lax.stop_gradient(jnp.quantile(losses, alpha))
+    scale = jax.lax.stop_gradient(jnp.maximum(jnp.std(losses), tau))
     grad_fn = jax.grad(lambda z: expected_shortfall(losses, z, alpha, tau))
 
     def body(_, zeta):

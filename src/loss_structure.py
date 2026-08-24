@@ -74,26 +74,103 @@ def robust_objective(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar
     
     return el + lambda_cvar * es + budget_penalty 
 
-@jax.jit
-def optimize_portfolio(scenarios_H_r, scenarios_fire , basis_noises = None, lambda_cvar = 0.5, budget_max = BUDGET_MAX, lr = 0.01, steps = 300) : # finds the optimal protfolio u* by gradient descent with JAX .
+def optimize_portfolio(scenarios_H_r, scenarios_fire , basis_noises = None, lambda_cvar = 0.5, budget_max = BUDGET_MAX, lr = 0.5, steps = 300, return_history = False) : # finds the optimal protfolio u* by gradient descent with JAX .
     # lr : vitesse a laquelle la descente de gradient modifie u a chaque etape
-    # steps : Nombre total d'itérations d'ajustement du portefeuille. À chaque itération, JAX calcule le gradient de J(u) et met à jour u   
+    # steps : Nombre total d'itérations d'ajustement du portefeuille. À chaque itération, JAX calcule le gradient de J(u) et met à jour u
+    # return_history : if True, also returns the trajectory of J(u) at each step (for convergence plots)
     if basis_noises is None:
         basis_noises = jnp.zeros_like(scenarios_fire)
 
     u_init = jnp.array([0.2, 0.2, 0.2, 0.2, 0.2])
     grad_fn = jax.grad(robust_objective, argnums = 0)
-    
+    obj_fn = lambda u: robust_objective(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar, budget_max)
+
     def optimized_range(u, _) :
-        grads = grad_fn(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar, budget_max)
-        grads = grads / jnp.maximum(jnp.max(jnp.abs(grads)), 1e-12) # normalize by inf-norm, J is in currency scale (~1e6) so raw gradients diverge to NaN
-        new_u = u - lr * grads
-        new_u = jnp.clip(new_u, 0.0, 1.0)
-        return new_u, None # we don't want the 300 proofs, only the optimized u*
-        
-    final_u, v = jax.lax.scan(optimized_range, u_init, xs = None, length = steps)    
+        raw_grads = grad_fn(u, scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar, budget_max)
+        # Normalize the step : the objective mixes currency-scale terms (~1e6),
+        # so raw gradients are huge and a fixed lr diverges (NaN). Scaling by
+        # the inf-norm keeps the descent direction while bounding the step
+        # to at most lr per lever.
+        step_scale = jnp.maximum(jnp.max(jnp.abs(raw_grads)), 1e-12)
+        grads = raw_grads / step_scale
+        # Backtracking : reject any step that increases J (the CVaR term is only
+        # locally smooth, so a full lr step can overshoot near the kink and
+        # diverge after ~150 iterations). Halving until J decreases keeps the
+        # descent monotone without changing the fixed point.
+        j_current = obj_fn(u)
+        new_u = jnp.clip(u - lr * grads, 0.0, 1.0)
+        j_new = obj_fn(new_u)
+
+        def backtrack(carry) :
+            u_try, j_try, half = carry
+            u_next = jnp.clip(u - 0.5 * half * lr * grads, 0.0, 1.0)
+            j_next = obj_fn(u_next)
+            accept = j_next < j_try
+            return (jnp.where(accept, u_next, u_try),
+                    jnp.where(accept, j_next, j_try),
+                    half * 0.5)
+
+        def cond_fn(carry) :
+            _, j_try, half = carry
+            return jnp.logical_and(j_try >= j_current, half > 1e-4)
+
+        final_u, final_j, _ = jax.lax.while_loop(cond_fn, backtrack,
+                                                 (new_u, j_new, jnp.array(1.0)))
+        return final_u, obj_fn(final_u) # keep the objective at each step for the convergence curve
+
+    final_u, history = jax.lax.scan(optimized_range, u_init, xs = None, length = steps)
+
+    if return_history :
+        # prepend the initial objective so the curve has steps + 1 points
+        j_init = obj_fn(u_init)
+        return final_u, jnp.concatenate([jnp.array([j_init]), history])
 
     return final_u
+
+# ---------------------------------------------------------------------------
+# Baseline policies required by the specification (section 6.1) :
+# the optimized portfolio must be compared against a uniform allocation and an
+# insurance-only strategy on the same scenario set.
+# ---------------------------------------------------------------------------
+
+def uniform_policy() -> jax.Array :
+    """Equal 20% allocation across the five decision levers."""
+    return policy_uniform()
+
+def insurance_only_policy() -> jax.Array :
+    """All capital on the parametric insurance lever, nothing on prevention."""
+    return policy_insurance()
+
+def evaluate_policy(u, scenarios_H_r, scenarios_fire, basis_noises = None, alpha = ALPHA_CVAR) :
+    """Return (EL, VaR, CVaR, capex) for a given portfolio on the scenario set."""
+    if basis_noises is None :
+        basis_noises = jnp.zeros_like(scenarios_fire)
+    losses = jax.vmap(lambda h, f, n: total_loss(u, h, f, n))(scenarios_H_r, scenarios_fire, basis_noises)
+    el, var, es = compute_risk_metrics(losses, alpha = alpha)
+    capex = jnp.sum(u * COST["unit_costs"])
+    return el, var, es, capex
+
+def compare_policies(scenarios_H_r, scenarios_fire, basis_noises = None, lambda_cvar = 0.5, steps = 300) :
+    """Compare uniform / insurance-only / optimized portfolios.
+
+    Returns a dict mapping policy name to its metrics dict. Used by experiment
+    E5 of the experimental plan (which portfolio dominates naive strategies ?).
+    """
+    if basis_noises is None :
+        basis_noises = jnp.zeros_like(scenarios_fire)
+
+    u_opt = optimize_portfolio(scenarios_H_r, scenarios_fire, basis_noises,
+                               lambda_cvar = lambda_cvar, steps = steps)
+
+    def _metrics(name, u) :
+        el, var, es, capex = evaluate_policy(u, scenarios_H_r, scenarios_fire, basis_noises)
+        return {"u": u, "EL": float(el), "VaR": float(var), "CVaR": float(es), "capex": float(capex)}
+
+    return {
+        "uniform": _metrics("uniform", uniform_policy()),
+        "insurance_only": _metrics("insurance_only", insurance_only_policy()),
+        "optimized": _metrics("optimized", u_opt),
+    }
 
 def generate_efficient_frontier(scenarios_H_r, scenarios_fire, n_points, basis_noises = None) : # Computes the Pareto frontier (EL vs. CVaR) by sweeping through n_points values of lambda_cvar
     # n_points : The number of optimal portfolios to compute along the frontier.
@@ -102,20 +179,23 @@ def generate_efficient_frontier(scenarios_H_r, scenarios_fire, n_points, basis_n
 
     lambdas = jnp.linspace(0.0, 2.0, n_points)
 
-    # maintenant : vmap sur lambda_cvar uniquement, un seul appel
-    # compile qui traite les n_points portefeuilles en parallele. scenarios_H_r/scenarios_fire/
-    # basis_noises restent fixes (in_axes=None), seul lambda_cvar varie (in_axes=0)
-    portfolios = jax.vmap(
-        lambda l: optimize_portfolio(scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar = l),
-        in_axes = 0, )(lambdas)  # shape (n_points, n_levers)
+    # vmap over lambda_cvar only : one compile handles all n_points portfolios.
+    # scenarios_H_r / scenarios_fire / basis_noises stay fixed (in_axes=None).
+    # NOTE : optimize_portfolio is not jitted, so this runs the scan eagerly
+    # per lambda ; wrap with jax.jit if profiling shows it dominates runtime.
+    def _solve(l) :
+        return optimize_portfolio(scenarios_H_r, scenarios_fire, basis_noises,
+                                  lambda_cvar = l, steps = 300)
 
-    def eval_metrics(u) :
-        losses = jax.vmap(lambda h, f, n: total_loss(u, h, f, n))(scenarios_H_r, scenarios_fire, basis_noises)
-        el = jnp.mean(losses)
-        es = optimal_expected_shortfall(losses, alpha = ALPHA_CVAR)
-        return el, es
+    def _single(l) :
+        u = _solve(l)
+        el, es = evaluate_policy(u, scenarios_H_r, scenarios_fire, basis_noises)[:2]
+        return u, el, es
 
-    frontier_el, frontier_es = jax.vmap(eval_metrics)(portfolios)  # same logic : one call instead of n_points
+    results = [(_single(float(l))) for l in lambdas]  # plain loop keeps NaNs from one lambda out of the others
+    portfolios = jnp.stack([r[0] for r in results])
+    frontier_el = jnp.stack([r[1] for r in results])
+    frontier_es = jnp.stack([r[2] for r in results])
 
     return portfolios, frontier_el, frontier_es
 
