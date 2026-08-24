@@ -4,8 +4,9 @@ import jax.numpy as jnp
 
 # 1. Correction de l'import (si le fichier generate_scenarios.py est à la racine)
 from generate_scenario import generate_scenario
+from conftest import requires_containers
 
-
+@requires_containers
 def test_generate_scenario_performance(pipeline, tiny_config):
     # 1. Définition des paramètres de test
     n_scenarios = 3
