@@ -57,10 +57,23 @@ def laplace_approx(
 ) -> dict : 
     
     loss_fn = make_physical_loss(pipeline, observations) # Create deterministic loss function L(theta)
-    hessian_fn = jax.hessian(loss_fn) # Generate JAX function computing matrix of second derivatives (Hessian)
 
+    # Finite-difference Hessian instead of jax.hessian : the smoke Tesseract
+    # only implements the VJP endpoint (no JVP), so second-order autodiff
+    # through it is not supported. Central differences on the exact gradient
+    # give the same matrix up to O(h^2), at the cost of 2n extra gradient
+    # evaluations (8 for four parameters).
     theta = jnp.asarray(theta_map, dtype = jnp.float64) # Ensure theta_MAP is in float64 JAX format
-    H = hessian_fn(theta) # Evaluate Hessian matrix H exactly at MAP optimum point theta_MAP
+    grad_fn = jax.grad(loss_fn)
+    n = theta.shape[0]
+    h = 1e-4
+    H = jnp.zeros((n, n), dtype = jnp.float64)
+    for i in range(n) :
+        e_i = jnp.zeros(n).at[i].set(h)
+        g_plus = grad_fn(theta + e_i)
+        g_minus = grad_fn(theta - e_i)
+        H = H.at[:, i].set((g_plus - g_minus) / (2.0 * h)) # column i of the Hessian
+    H = 0.5 * (H + H.T) # symmetrize to remove finite-difference asymmetry
 
     H_stable = H + jitter * jnp.eye(H.shape[0]) # Add small identity matrix (H + jitter * I)
     covariance = jnp.linalg.inv(H_stable) # Invert Hessian to get covariance (Sigma = H^-1)

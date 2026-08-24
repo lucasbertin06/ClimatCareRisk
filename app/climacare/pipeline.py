@@ -124,9 +124,10 @@ class TesseractPipeline:
         """
         from tesseract_jax import apply_tesseract
 
-        fire = apply_tesseract(self.fire_client, self.fire_inputs(theta, 1))
+        fire = apply_tesseract(self.fire_client, self.fire_inputs(theta, 1), vmap_method="sequential")
         smoke = apply_tesseract(
-            self.smoke_client, self.smoke_inputs(theta, fire["smoke_source"], 1)
+            self.smoke_client, self.smoke_inputs(theta, fire["smoke_source"], 1),
+            vmap_method="sequential",
         )
         return smoke["sensor_concentration"]
 
@@ -135,9 +136,10 @@ class TesseractPipeline:
         from tesseract_jax import apply_tesseract
 
         frames = self.config.frame_count if frame_count is None else frame_count
-        fire = apply_tesseract(self.fire_client, self.fire_inputs(theta, frames))
+        fire = apply_tesseract(self.fire_client, self.fire_inputs(theta, frames), vmap_method="sequential")
         smoke = apply_tesseract(
-            self.smoke_client, self.smoke_inputs(theta, fire["smoke_source"], frames)
+            self.smoke_client, self.smoke_inputs(theta, fire["smoke_source"], frames),
+            vmap_method="sequential",
         )
         return {
             "smoke_source": fire["smoke_source"],
