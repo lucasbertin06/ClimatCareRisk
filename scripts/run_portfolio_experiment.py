@@ -1,3 +1,9 @@
+# Experiment E5 : pipeline -> posterior -> scenarios -> portfolio optimization
+#
+# Two modes :
+#   python scripts/run_portfolio_experiment.py --fake   # synthetic scenarios, no Docker needed
+#   python scripts/run_portfolio_experiment.py          # full chain, needs the two Tesseract images (make build-c0)
+
 from __future__ import annotations
 
 import argparse
@@ -8,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "app"))
+sys.path.insert(0, str(ROOT))  # repo root : needed for "from src.generate_scenario import ..."
 
 import jax
 jax.config.update("jax_enable_x64", True)
@@ -80,7 +87,7 @@ def main() :
         scenarios_H_r, scenarios_fire = fake_scenarios(args.n)
         print("[scenarios] using synthetic data (--fake)")
     else :
-        scenarios_H_r, scenarios_fire = real_scenarios(args)
+        scenarios_fire, scenarios_H_r = real_scenarios(args)  # generate_scenario returns (fire, H_r)
         print("[scenarios] generated from the Tesseract pipeline")
 
     basis_noises = jnp.zeros_like(scenarios_fire)
