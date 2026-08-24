@@ -17,8 +17,7 @@ def test_generate_scenario_performance(pipeline, tiny_config):
     # 2. Mesure du temps d'exécution
     start_time = time.perf_counter()
 
-    # 2. Correction du nom de la fonction (ajout du 's' à generate_scenarios)
-    scenarios_fire, scenarios_H_r = generate_scenarios(
+    scenarios_fire, scenarios_H_r = generate_scenario(
         pipeline,
         tiny_config,
         zones,
