@@ -161,5 +161,6 @@ def _environment() -> dict[str, str]:
 
     return dict(
         os.environ,
-        PYTHONPATH=f"{REPOSITORY / 'components' / 'shared_code'}:{REPOSITORY / 'app'}",
+        # os.pathsep : ";" on Windows, ":" on Linux
+        PYTHONPATH=os.pathsep.join([str(REPOSITORY / "components" / "shared_code"), str(REPOSITORY / "app")]),
     )
