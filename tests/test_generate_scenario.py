@@ -4,8 +4,9 @@ import jax.numpy as jnp
 
 # 1. Correction de l'import (si le fichier generate_scenarios.py est à la racine)
 from generate_scenario import generate_scenario
+from conftest import requires_containers
 
-
+@requires_containers
 def test_generate_scenario_performance(pipeline, tiny_config):
     # 1. Définition des paramètres de test
     n_scenarios = 3
@@ -17,8 +18,7 @@ def test_generate_scenario_performance(pipeline, tiny_config):
     # 2. Mesure du temps d'exécution
     start_time = time.perf_counter()
 
-    # 2. Correction du nom de la fonction (ajout du 's' à generate_scenarios)
-    scenarios_fire, scenarios_H_r = generate_scenarios(
+    scenarios_fire, scenarios_H_r = generate_scenario(
         pipeline,
         tiny_config,
         zones,
