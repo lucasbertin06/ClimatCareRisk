@@ -40,4 +40,4 @@ def simulate_scenarios(
         dt = config.dt, cell_area = cell_area,
         filter_level = filter_level, theta_samples = thetas,
     )
-    return {"scenarios_fire": scenarios_fire, "scenarios_H_r" : scenarios_H_r}
+    return {"scenarios_fire" : scenarios_fire, "scenarios_H_r" : scenarios_H_r}
