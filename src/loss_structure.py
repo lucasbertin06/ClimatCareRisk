@@ -34,17 +34,19 @@ def total_loss(u, H_r, fire_intensity, basis_noise = 0.0, param = COST) :
     L_assets = param['base_assets_loss'] * fire_intensity * (1.0 - 0.5 * u[0])
     C_interventions = param['intervention_cost'] * fire_intensity
     
-    brut_loss = L_health + L_activity + L_assets + C_interventions
+    financial_loss = L_activity + L_assets + C_interventions
 
     index_reading = jnp.clip(fire_intensity + basis_noise, 0.0, 1.0) # Basis risk handling: Account for noise between ground truth and satellite/weather index
     temp = param.get('trigger_temperature', 0.15) # temp = 0.15 instead of 0.05 so the gradients can propagate on the interval [0.4; 0.8]
     trigger = jax.nn.sigmoid((index_reading - 0.6) / temp) # with a smooth sigmoid to ensure continuous differentiability for JAX (jax.grad)
-    
-    I_assurance = u[3] * param['max_insurance_payout'] * trigger
 
+    I_assurance = u[3] * param['max_insurance_payout'] * trigger
     reserve_available = u[4] * param['unit_costs'][4]
-    L_tot = jnp.maximum(0.0, brut_loss - I_assurance - reserve_available)
-    
+
+    net_financial = jnp.maximum(0.0, financial_loss - I_assurance - reserve_available)
+
+    L_tot = L_health + net_financial  # health impact always fully present, never netted by insurance/reserve
+
     return L_tot
 
 def compute_risk_metrics(losses, alpha = ALPHA_CVAR, tau = SMOOTHING_TAU) : # This function returns EL, VaR, Expected Shortfall/CVaR 
