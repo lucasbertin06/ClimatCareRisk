@@ -20,16 +20,15 @@ def posterior_theta_samples(
     # uq.laplace_approx -> scenarios.posterior_theta_samples -> generate_scenario(theta_samples=...)
     mean = jnp.asarray(laplace["theta_map"])
     cov = jnp.asarray(laplace["covariance"])
-    draws = jax.random.multivariate_normal(rng_key, mean = mean, cov = cov,
-        shape = (num_samples,),)
+    draws = jax.random.multivariate_normal(rng_key, mean = mean, cov = cov, shape = (num_samples,),)
     return np.asarray(draws)
 
 
 def simulate_scenarios(
-    pipeline: TesseractPipeline,
-    thetas: np.ndarray,
-    zones: list[HealthZone],
-    cell_area: float,
+    pipeline : TesseractPipeline,
+    thetas : np.ndarray,
+    zones : list[HealthZone],
+    cell_area : float,
     filter_level: float = 0.0,) -> dict :
     # Thin wrapper around src.generate_scenario (the single scenario generator),
     # kept so older call sites keep working. Returns a dict instead of a class.
@@ -41,4 +40,4 @@ def simulate_scenarios(
         dt = config.dt, cell_area = cell_area,
         filter_level = filter_level, theta_samples = thetas,
     )
-    return {"scenarios_fire": scenarios_fire, "scenarios_H_r": scenarios_H_r}
+    return {"scenarios_fire": scenarios_fire, "scenarios_H_r" : scenarios_H_r}
