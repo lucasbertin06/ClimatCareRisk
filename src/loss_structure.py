@@ -191,7 +191,7 @@ def generate_efficient_frontier(scenarios_H_r, scenarios_fire, n_points, basis_n
 
     def _single(l) :
         u = _solve(l)
-        el, es = evaluate_policy(u, scenarios_H_r, scenarios_fire, basis_noises)[:2]
+        el, var, es, capex = evaluate_policy(u, scenarios_H_r, scenarios_fire, basis_noises)[:2]
         return u, el, es
 
     results = [(_single(float(l))) for l in lambdas]  # plain loop keeps NaNs from one lambda out of the others
@@ -217,13 +217,15 @@ def run_stress_tests(u_opt, scenarios_H_r, scenarios_fire, basis_noises, budget_
     def metrics(fire, noises) :
         losses = jax.vmap(lambda h, f, n: total_loss(u_opt, h, f, n))(scenarios_H_r, fire, noises)
         el, _, es = compute_risk_metrics(losses)
-        return {"EL": el, "CVaR": es}
+        capex = jnp.sum(u_opt * COST["unit_costs"])
+        feasible = capex <= budget  # u_opt reste il finançable sous le budget réduit
+        return {"EL" : el, "CVaR" : es, "feasible" : bool(feasible), "capex" : float(capex)}
 
-    results = {"nominal": metrics(scenarios_fire, basis_noises)}
+    results = {"nominal": metrics(scenarios_fire, basis_noises, budget_max)}
 
     for kind in ["wind_strong", "sensor_biased", "budget_cut"] : # Stress testing across predefined perturbation kinds
         s = apply_stress(kind, scenarios_fire = scenarios_fire, basis_noises = basis_noises, budget_max = budget_max)
-        results[kind] = metrics(s["scenarios_fire"], s["basis_noises"])
+        results[kind] = metrics(s["scenarios_fire"], s["basis_noises"], s["budget_max"])
     return results
 
 def policy_uniform(n_levers = 5) : # it's an equivalent repartition
