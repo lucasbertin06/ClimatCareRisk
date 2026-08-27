@@ -174,32 +174,28 @@ def compare_policies(scenarios_H_r, scenarios_fire, basis_noises = None, lambda_
         "optimized": _metrics("optimized", u_opt),
     }
 
-def generate_efficient_frontier(scenarios_H_r, scenarios_fire, n_points, basis_noises = None) : # Computes the Pareto frontier (EL vs. CVaR) by sweeping through n_points values of lambda_cvar
-    # n_points : The number of optimal portfolios to compute along the frontier.
+def generate_efficient_frontier(scenarios_H_r, scenarios_fire, n_points, basis_noises = None, budget_range = (200_000.0, 800_000.0), lambda_cvar = 0.5) :
+    # Sweep budget_max, pas lambda_cvar : à BUDGET_MAX=1M, la contrainte
+    # budgétaire ne sature jamais (max dépense possible = 900k), donc faire
+    # varier lambda seul ne produit pas de vrai compromis coût/risque.
+    # Un budget réellement contraignant sur [200k, 800k] force les arbitrages.
     if basis_noises is None :
         basis_noises = jnp.zeros_like(scenarios_fire)
 
-    lambdas = jnp.linspace(0.0, 2.0, n_points)
+    budgets = jnp.linspace(budget_range[0], budget_range[1], n_points)
 
-    # vmap over lambda_cvar only : one compile handles all n_points portfolios.
-    # scenarios_H_r / scenarios_fire / basis_noises stay fixed (in_axes=None).
-    # NOTE : optimize_portfolio is not jitted, so this runs the scan eagerly
-    # per lambda ; wrap with jax.jit if profiling shows it dominates runtime.
-    def _solve(l) :
-        return optimize_portfolio(scenarios_H_r, scenarios_fire, basis_noises,
-                                  lambda_cvar = l, steps = 300)
+    def single(b):
+        u = optimize_portfolio(scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar = lambda_cvar, budget_max  =float(b), steps = 300)
+        el, _var, es, capex = evaluate_policy(u, scenarios_H_r, scenarios_fire, basis_noises)
+        return u, el, es, capex
 
-    def _single(l) :
-        u = _solve(l)
-        el, var, es, capex = evaluate_policy(u, scenarios_H_r, scenarios_fire, basis_noises)[:2]
-        return u, el, es
-
-    results = [(_single(float(l))) for l in lambdas]  # plain loop keeps NaNs from one lambda out of the others
+    results = [single(b) for b in budgets]  # boucle simple : isole les NaN d'un budget des autres
     portfolios = jnp.stack([r[0] for r in results])
     frontier_el = jnp.stack([r[1] for r in results])
-    frontier_es = jnp.stack([r[2] for r in results])
+    frontier_es = jnp.stack([r[2] for r in results])   # vraie CVaR maintenant, plus var
+    frontier_capex = jnp.stack([r[3] for r in results])
 
-    return portfolios, frontier_el, frontier_es
+    return portfolios, frontier_el, frontier_es, frontier_capex, budgets
 
 def apply_stress(kind, *, scenarios_fire, basis_noises, budget_max) : # it's a Stress-Testing function, its objective is to verify the robustness of the optimal investment portfolio u* when subjected to unforeseen degradations
     if kind == "wind_strong" : # intense fire
