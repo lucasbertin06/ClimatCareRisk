@@ -29,6 +29,10 @@ def parse_args() :
     p.add_argument("--steps", type = int, default = 300) # optimizer iterations
     p.add_argument("--lambda-cvar", type = float, default = 0.5)
     p.add_argument("--num-samples", type = int, default = 20) # posterior draws (real mode)
+    p.add_argument("--spread", type = float, default = 1.0,
+                   help = "covariance inflation factor for posterior draws; "
+                          "values > 1 widen the sample spread and make the "
+                          "EL/CVaR frontier non-degenerate (spec section 10.3)")
     p.add_argument("--seed", type = int, default = 0)
     p.add_argument("--fake", action = "store_true") # synthetic scenarios, no Docker needed
     return p.parse_args()
@@ -68,12 +72,15 @@ def real_scenarios(args) :
         laplace = laplace_approx(pipeline, observations, map_result.estimate)
 
         rng_key = jax.random.PRNGKey(args.seed)
-        mean = jnp.asarray(laplace["theta_map"])
         cov = jnp.asarray(laplace["covariance"])
+        if args.spread != 1.0 :
+            cov = cov * float(args.spread) ** 2
+            print(f"[chain] posterior spread inflated x{args.spread}")
+        mean = jnp.asarray(laplace["theta_map"])
         thetas = np.asarray(jax.random.multivariate_normal(rng_key, mean, cov,
             shape = (args.num_samples,),))
-        # note : we draw directly from the Laplace dict here ; when a LaplaceResult
-        # dataclass exists in uq.py, use scenarios.posterior_theta_samples(laplace, ...) instead
+        # note : we draw from the Laplace dict directly ; scenarios.posterior_theta_samples
+        # is the equivalent helper for reuse outside this script
 
         print(f"[chain] generating {len(thetas)} scenarios through the pipeline...")
         return generate_scenario(pipeline, config, zones, len(thetas),
