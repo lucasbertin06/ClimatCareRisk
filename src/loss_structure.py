@@ -209,19 +209,34 @@ def apply_stress(kind, *, scenarios_fire, basis_noises, budget_max) : # it's a S
     
     raise ValueError(f"unknown stress kind : {kind}")
 
-def run_stress_tests(u_opt, scenarios_H_r, scenarios_fire, basis_noises, budget_max = BUDGET_MAX) : # Evaluate a fixed optimal portfolio u_opt under stress scenarios without re-optimizing 
-    def metrics(fire, noises) :
-        losses = jax.vmap(lambda h, f, n: total_loss(u_opt, h, f, n))(scenarios_H_r, fire, noises)
+def run_stress_tests(u_opt, scenarios_H_r, scenarios_fire, basis_noises = None, budget_max = BUDGET_MAX, lambda_cvar = 0.5) : # Evaluate the portfolio under predefined stress scenarios
+    if basis_noises is None :
+        basis_noises = jnp.zeros_like(scenarios_fire)
+
+    def metrics(u, H_r, fire, noises) :
+        losses = jax.vmap(lambda h, f, n: total_loss(u, h, f, n))(H_r, fire, noises)
         el, _, es = compute_risk_metrics(losses)
-        capex = jnp.sum(u_opt * COST["unit_costs"])
-        feasible = capex <= budget  # u_opt reste il finançable sous le budget réduit
-        return {"EL" : el, "CVaR" : es, "feasible" : bool(feasible), "capex" : float(capex)}
+        return {"EL" : el, "CVaR" : es}
 
-    results = {"nominal": metrics(scenarios_fire, basis_noises, budget_max)}
+    results = {"nominal" : metrics(u_opt, scenarios_H_r, scenarios_fire, basis_noises)}
 
-    for kind in ["wind_strong", "sensor_biased", "budget_cut"] : # Stress testing across predefined perturbation kinds
-        s = apply_stress(kind, scenarios_fire = scenarios_fire, basis_noises = basis_noises, budget_max = budget_max)
-        results[kind] = metrics(s["scenarios_fire"], s["basis_noises"], s["budget_max"])
+    wind = apply_stress("wind_strong", scenarios_fire = scenarios_fire, basis_noises = basis_noises, budget_max = budget_max)
+    results["wind_strong"] = metrics(u_opt, scenarios_H_r * 1.3, wind["scenarios_fire"], wind["basis_noises"]) # proxy stress : stronger wind increases fire and health impacts
+
+    sensor = apply_stress("sensor_biased", scenarios_fire = scenarios_fire, basis_noises = basis_noises, budget_max = budget_max)
+    results["sensor_biased"] = metrics(u_opt, scenarios_H_r, sensor["scenarios_fire"], sensor["basis_noises"])
+
+    budget = apply_stress("budget_cut", scenarios_fire = scenarios_fire, basis_noises = basis_noises, budget_max = budget_max)
+    reduced_budget = budget["budget_max"]
+    u_reopt = optimize_portfolio(scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar = lambda_cvar, budget_max = reduced_budget, steps = 300)
+    results["budget_cut"] = metrics(u_reopt, scenarios_H_r, scenarios_fire, basis_noises)
+
+    capex = jnp.sum(u_reopt * COST["unit_costs"])
+    results["budget_cut"]["budget"] = float(reduced_budget)
+    results["budget_cut"]["capex"] = float(capex)
+    results["budget_cut"]["budget_respected"] = bool(capex <= reduced_budget * 1.01)
+    results["budget_cut"]["u_reoptimized"] = [float(x) for x in u_reopt]
+
     return results
 
 def policy_uniform(n_levers = 5) : # it's an equivalent repartition

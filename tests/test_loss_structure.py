@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import pytest
 
-from loss_structure import COST, optimize_portfolio, robust_objective, total_loss
+from loss_structure import COST, optimize_portfolio, robust_objective, run_stress_tests, total_loss
 
 
 def _fake_scenarios(n=20):
