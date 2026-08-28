@@ -12,8 +12,9 @@ def test_generate_scenario_performance(pipeline, tiny_config):
     n_scenarios = 3
     max_seconds_allowed = 10.0
     
-    # Création de zones fictives si aucune fixture zones n'existe
-    zones = jnp.zeros((10, 10))
+    from climacare.zones import default_zones
+
+    zones = default_zones(tiny_config)
 
     # 2. Mesure du temps d'exécution
     start_time = time.perf_counter()
