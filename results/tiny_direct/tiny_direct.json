@@ -1,0 +1,46 @@
+{
+  "command": "tiny-direct",
+  "configuration": {
+    "case": "tiny",
+    "seed": 20260805,
+    "grid": {
+      "nx": 32,
+      "ny": 32
+    },
+    "dt": 0.02,
+    "n_steps": 60,
+    "nu_fire_realised": 0.4683839999999999,
+    "nu_smoke_realised": 0.598288
+  },
+  "versions": {
+    "python": "",
+    "jax": "0.11.0",
+    "numpy": "2.5.1",
+    "tesseract_core": "1.11.0",
+    "tesseract_jax": "0.4.1",
+    "fire_image": "fire_spread_torch",
+    "smoke_image": "smoke_transport_cpp"
+  },
+  "git_commit": "dcd4933",
+  "truth_theta": [
+    0.3,
+    0.28,
+    0.1823215568,
+    0.12
+  ],
+  "diagnostics": {
+    "burned_area": 0.1253727756274263,
+    "smoke_cfl_number": 0.4289760431857505,
+    "health_impacts_per_zone": [
+      555.260596935388,
+      43.097045814297665,
+      488.24279652720423
+    ]
+  },
+  "stability": {
+    "nu_smoke_realised": 0.4289760431857505
+  },
+  "downstream": {
+    "loss_physical": 1086.7258120525173
+  }
+}
