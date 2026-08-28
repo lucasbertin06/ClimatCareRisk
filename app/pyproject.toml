@@ -79,4 +79,4 @@ raw-options = { root = ".." }
 version-file = "plume_inversion/_version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["plume_inversion", "wildfire"]
+packages = ["plume_inversion", "climacare"]
