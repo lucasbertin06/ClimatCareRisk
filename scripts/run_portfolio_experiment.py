@@ -127,9 +127,13 @@ def main() :
     for kind, v in stress.items() :
         print(f"stress {kind:14s} EL={float(v['EL']):>10.0f}  CVaR={float(v['CVaR']):>10.0f}")
 
-    portfolios, els, ess = generate_efficient_frontier(scenarios_H_r, scenarios_fire, 8, basis_noises)
-    for i in range(len(els)) :
-        print(f"frontier lambda={2.0*i/7:.2f}  EL={float(els[i]):>10.0f}  CVaR={float(ess[i]):>10.0f}")
+    portfolios, els, ess, capex, budgets = generate_efficient_frontier(scenarios_H_r, scenarios_fire, 8, basis_noises)
+
+    print("\nbudget frontier :")
+    for i in range(len(budgets)) :
+        u_list = [round(float(x), 3) for x in portfolios[i]]
+        budget_ok = float(capex[i]) <= float(budgets[i]) * 1.01
+        print(f"budget={float(budgets[i]):.0f}  capex={float(capex[i]):.0f}  EL={float(els[i]):.0f}  CVaR={float(ess[i]):.0f}  budget_ok={budget_ok}  u={u_list}")
 
     results = {
         "mode": "fake" if args.fake else "pipeline",
@@ -140,9 +144,20 @@ def main() :
         "policies": {k: {"EL": m["EL"], "VaR": m["VaR"], "CVaR": m["CVaR"], "capex": m["capex"]}
                      for k, m in comparison.items()},
         "smart_target_met": bool(smart["smart_target_met"]),
-        "stress": {k: {"EL": float(v["EL"]), "CVaR": float(v["CVaR"])} for k, v in stress.items()},
-        "frontier_EL": [float(x) for x in els],
-        "frontier_CVaR": [float(x) for x in ess],
+        "stress": {
+            k: {
+                key: ([float(x) for x in value] if key == "u_reoptimized" else bool(value) if key == "budget_respected" else float(value))
+                for key, value in v.items()
+            }
+            for k, v in stress.items()
+        },
+        "budget_frontier" : {
+            "budgets": [float(x) for x in budgets],
+            "capex": [float(x) for x in capex],
+            "EL": [float(x) for x in els],
+            "CVaR": [float(x) for x in ess],
+            "portfolios": [[float(x) for x in u] for u in portfolios],
+        },
     }
     out = ROOT / "results"
     out.mkdir(exist_ok = True)
