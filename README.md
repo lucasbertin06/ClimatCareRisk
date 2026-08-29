@@ -1,73 +1,85 @@
 # ClimaCare-Risk
 
-Jumeau numérique différentiable pour la résilience sanitaire et financière face aux incendies de forêt.
+Differentiable digital twin for health and financial resilience against wildfires.
 
-Pipeline scientifique reliant, dans une seule chaîne de calcul différentiable : propagation du feu → transport des fumées → exposition sanitaire → risque et allocation financière. Projet réalisé dans le cadre du **Tesseract Hackathon 2026** (track principal : *Differentiable inference & uncertainty quantification*).
+A scientific pipeline linking, in a single differentiable computation chain: fire spread → smoke transport → health exposure → financial risk and allocation. Built for the **Tesseract Hackathon 2026** (main track: *Differentiable inference & uncertainty quantification*).
 
 ## Architecture
 
-Quatre composants hétérogènes, composés via [Tesseract](https://docs.pasteurlabs.ai/projects/tesseract-core/latest/) :
+Four heterogeneous components, composed via [Tesseract](https://docs.pasteurlabs.ai/projects/tesseract-core/latest/):
 
-| Composant | Rôle | Langage / différentiation |
+| Component | Role | Language / differentiation |
 |---|---|---|
-| `fire_spread_torch` | Propagation du feu (réaction-diffusion-advection) | PyTorch, autodiff |
-| `smoke_transport_cpp` | Transport atmosphérique des fumées | C++20/OpenMP, adjoint discret écrit à la main |
-| HealthImpact | Exposition et pression sanitaire | JAX, autodiff native |
-| ResilienceFinance | Perte attendue, CVaR, allocation de portefeuille | JAX/Python |
+| `fire_spread_torch` | Fire propagation (reaction-diffusion-advection) | PyTorch, autodiff |
+| `smoke_transport_cpp` | Atmospheric smoke transport | C++20/OpenMP, hand-written discrete adjoint |
+| HealthImpact | Exposure and health burden | JAX, native autodiff |
+| ResilienceFinance | Expected loss, CVaR, portfolio allocation | JAX/Python |
 
-L'orchestrateur (`app/climacare`) appelle les deux premiers via Tesseract-JAX et porte l'inférence bayésienne (MAP, Laplace, NUTS) et l'optimisation robuste.
+The orchestrator (`app/climacare`) calls the first two through Tesseract-JAX and drives Bayesian inference (MAP, Laplace, NUTS) and robust optimization.
 
-## Prérequis
+## Requirements
 
 - Python ≥ 3.10
-- [Docker](https://docs.docker.com/get-docker/) (build des images Tesseract)
+- [Docker](https://docs.docker.com/get-docker/) (to build the Tesseract images)
 - `pip install tesseract-core`
 - GNU Make
 
-## Installation et build
+## Installation and build
 
 ```bash
 git clone https://github.com/lucasbertin06/ClimatCareRisk.git
 cd ClimatCareRisk
 pip install -e app -e components/shared_code
 
-make build-c0     # build + tag les images fire_spread_torch et smoke_transport_cpp
-make smoke-kernel # compile le kernel C++ (cmake) hors image, pour les tests locaux
+make build-c0     # build + tag the fire_spread_torch and smoke_transport_cpp images
+make smoke-kernel # compile the C++ kernel (cmake) outside the image, for local tests
 ```
 
-## Reproduire les résultats
+## Reproducing the results
+
+All experiments run through a single entry point, `climacare.cli`:
 
 ```bash
-make tiny-direct    # E1 : simulation directe feu -> fumée (cas Tiny)
-make tiny-gradient  # E2 : validation du gradient de bout en bout
-make tiny-map       # E3 : problème inverse (MAP)
-make test           # suite de tests complète
+python -m climacare.cli direct    --output-dir results/tiny_direct         # E1: direct fire -> smoke simulation
+python -m climacare.cli map       --output-dir results/tiny_map            # E2/E3: gradient check + inverse problem (MAP)
+python -m climacare.cli uq        --output-dir results/tiny_uq [--nuts]    # E4: Laplace posterior, optional NUTS refinement
+python -m climacare.cli portfolio --output-dir results/portfolio [--fake]  # E5/E6: robust portfolio + stress tests
 ```
 
-Portefeuille de résilience et frontière efficiente (E5/E6) :
+Equivalent shortcuts via `make`:
 
 ```bash
-python scripts/run_portfolio_experiment.py
+make tiny-direct    # E1
+make tiny-gradient  # E2 (dedicated gradient test)
+make tiny-map       # E2 + E3
+make test           # full test suite
 ```
 
-Les résultats sont écrits dans `results/`.
+`portfolio --fake` uses synthetic scenarios and needs no Docker images; without `--fake`, the command chains MAP → Laplace → posterior sampling → simulation through the Tesseract pipeline, and requires `make build-c0` beforehand.
 
-## Structure du dépôt
+For finer-grained variants (number of scenarios, posterior spread, CVaR level...), the original script is still available:
+```bash
+python scripts/run_portfolio_experiment.py --help
+```
 
-app/climacare/ # orchestrateur : pipeline, inférence, UQ, finance, CLI  
-components/tesseracts/ # composants Tesseract (fire_spread_torch, smoke_transport_cpp)  
-components/shared_code/ # code Python partagé entre composants et orchestrateur  
-src/ # génération de scénarios, modèle de perte, modèle sanitaire  
-scripts/ # expériences (portefeuille, benchmarks)  
-tests/ # suite de tests (pytest)  
-docs/ # spécification mathématique  
-results/ # sorties des expériences  
-configs/ # configurations de scénarios (ex. tiny.yaml)
+Results are written as reproducible JSON files under `results/`.
 
-## Licence
+## Repository structure
 
-Apache License 2.0 — voir [LICENSE](LICENSE).
+app/climacare/ # orchestrator: pipeline, inference, UQ, finance, CLI  
+components/tesseracts/ # Tesseract components (fire_spread_torch, smoke_transport_cpp)  
+components/shared_code/ # Python code shared between components and the orchestrator  
+src/ # scenario generation, loss structure, health model  
+scripts/ # experiments (portfolio, benchmarks)  
+tests/ # test suite (pytest)  
+docs/ # mathematical specification  
+results/ # experiment outputs  
+configs/ # scenario configurations (e.g. tiny.yaml)
 
-## Statut
+## License
 
-Prototype de recherche développé pour le Tesseract Hackathon 2026 (4–31 août 2026). Les résultats sanitaires, assurantiels et économiques présentés sont des hypothèses de démonstration : ils ne constituent ni une prévision opérationnelle, ni un avis clinique ou financier.
+Apache License 2.0 — see [LICENSE](LICENSE).
+
+## Status
+
+Research prototype built for the Tesseract Hackathon 2026 (August 4–31, 2026). The health, insurance, and economic results shown are demonstration hypotheses: they do not constitute an operational forecast, nor clinical or financial advice.
