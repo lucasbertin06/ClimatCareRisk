@@ -226,6 +226,29 @@ def run_stress_tests(u_opt, scenarios_H_r, scenarios_fire, basis_noises = None, 
     sensor = apply_stress("sensor_biased", scenarios_fire = scenarios_fire, basis_noises = basis_noises, budget_max = budget_max)
     results["sensor_biased"] = metrics(u_opt, scenarios_H_r, sensor["scenarios_fire"], sensor["basis_noises"])
 
+    temp = COST.get("trigger_temperature", 0.15)
+    index_nominal = jnp.clip(scenarios_fire + basis_noises, 0.0, 1.0)
+    index_biased = jnp.clip(sensor["scenarios_fire"] + sensor["basis_noises"], 0.0, 1.0)
+    trigger_nominal = jax.nn.sigmoid((index_nominal - 0.6) / temp)
+    trigger_biased = jax.nn.sigmoid((index_biased - 0.6) / temp)
+
+    financial_loss = (
+        COST["base_activity_loss"] * scenarios_fire * (1.0 - 0.4 * u_opt[1])
+        + COST["base_assets_loss"] * scenarios_fire * (1.0 - 0.5 * u_opt[0])
+        + COST["intervention_cost"] * scenarios_fire
+    )
+    reserve_available = u_opt[4] * COST["unit_costs"][4]
+    payout_nominal = u_opt[3] * COST["max_insurance_payout"] * trigger_nominal
+    payout_biased = u_opt[3] * COST["max_insurance_payout"] * trigger_biased
+    residual_nominal = jnp.maximum(0.0, financial_loss - payout_nominal - reserve_available)
+    residual_biased = jnp.maximum(0.0, financial_loss - payout_biased - reserve_available)
+
+    results["sensor_biased"]["basis_noise_shift"] = float(jnp.mean(sensor["basis_noises"] - basis_noises))
+    results["sensor_biased"]["mean_trigger_change"] = float(jnp.mean(jnp.abs(trigger_nominal - trigger_biased)))
+    results["sensor_biased"]["mean_financial_residual_nominal"] = float(jnp.mean(residual_nominal))
+    results["sensor_biased"]["mean_financial_residual_biased"] = float(jnp.mean(residual_biased))
+    results["sensor_biased"]["affected_scenarios"] = int(jnp.sum(jnp.abs(residual_biased - residual_nominal) > 1e-6))
+
     budget = apply_stress("budget_cut", scenarios_fire = scenarios_fire, basis_noises = basis_noises, budget_max = budget_max)
     reduced_budget = budget["budget_max"]
     u_reopt = optimize_portfolio(scenarios_H_r, scenarios_fire, basis_noises, lambda_cvar = lambda_cvar, budget_max = reduced_budget, steps = 300)
