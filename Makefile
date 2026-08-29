@@ -35,7 +35,7 @@ tiny-gradient:
 
 # Runs the MAP/inverse tests for the Tiny case.
 tiny-map:
-	$(PYTHON) -m pytest tests/test_gradient_pipeline.py tests/test_direct_pipeline.py -q
+	$(PYTHON) -m climacare.cli map --output-dir results/tiny_map
 
 test:
 	$(PYTHON) -m pytest tests -q
