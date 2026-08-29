@@ -21,7 +21,7 @@
     "fire_image": "fire_spread_torch",
     "smoke_image": "smoke_transport_cpp"
   },
-  "git_commit": "dcd4933",
+  "git_commit": "efcad6d",
   "truth_theta": [
     0.3,
     0.28,
