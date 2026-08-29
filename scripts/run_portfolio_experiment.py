@@ -135,6 +135,21 @@ def main() :
         budget_ok = float(capex[i]) <= float(budgets[i]) * 1.01
         print(f"budget={float(budgets[i]):.0f}  capex={float(capex[i]):.0f}  EL={float(els[i]):.0f}  CVaR={float(ess[i]):.0f}  budget_ok={budget_ok}  u={u_list}")
 
+    constrained_budget = float(budgets[0])
+    constrained_u = portfolios[0]
+    constrained_stress = run_stress_tests(
+        constrained_u,
+        scenarios_H_r,
+        scenarios_fire,
+        basis_noises,
+        budget_max = constrained_budget,
+        lambda_cvar = args.lambda_cvar,
+    )
+
+    print(f"\nstress tests with constrained budget ({constrained_budget:.0f}) :")
+    for kind, v in constrained_stress.items() :
+        print(f"stress {kind:14s} EL={float(v['EL']):>10.0f}  CVaR={float(v['CVaR']):>10.0f}")
+
     results = {
         "mode": "fake" if args.fake else "pipeline",
         "config": {"n": args.n, "steps": args.steps, "lambda_cvar": args.lambda_cvar, "seed": args.seed},
@@ -157,6 +172,17 @@ def main() :
             "EL": [float(x) for x in els],
             "CVaR": [float(x) for x in ess],
             "portfolios": [[float(x) for x in u] for u in portfolios],
+        },
+        "constrained_budget_stress": {
+            "budget": constrained_budget,
+            "portfolio": [float(x) for x in constrained_u],
+            "stress": {
+                k: {
+                    key: ([float(x) for x in value] if key == "u_reoptimized" else bool(value) if key == "budget_respected" else float(value))
+                    for key, value in v.items()
+                }
+                for k, v in constrained_stress.items()
+            },
         },
     }
     out = ROOT / "results"

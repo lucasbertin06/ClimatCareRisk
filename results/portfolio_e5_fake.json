@@ -47,7 +47,12 @@
     },
     "sensor_biased": {
       "EL": 59124.02251812165,
-      "CVaR": 126338.51197614962
+      "CVaR": 126338.51197614962,
+      "basis_noise_shift": -0.14999999999999997,
+      "mean_trigger_change": 0.14486567235912226,
+      "mean_financial_residual_nominal": 0.0,
+      "mean_financial_residual_biased": 50124.02251812165,
+      "affected_scenarios": 14.0
     },
     "budget_cut": {
       "EL": 14098.048352940303,
@@ -163,5 +168,48 @@
         1.0
       ]
     ]
+  },
+  "constrained_budget_stress": {
+    "budget": 200000.0,
+    "portfolio": [
+      0.16540605722831514,
+      0.09516626444163002,
+      0.005407080200692454,
+      0.3672485876297206,
+      0.12015733779316563
+    ],
+    "stress": {
+      "nominal": {
+        "EL": 472668.723478399,
+        "CVaR": 859813.6000374483
+      },
+      "wind_strong": {
+        "EL": 597870.2484305832,
+        "CVaR": 1065941.8719625752
+      },
+      "sensor_biased": {
+        "EL": 499269.5802633577,
+        "CVaR": 855377.9570545243,
+        "basis_noise_shift": -0.14999999999999997,
+        "mean_trigger_change": 0.14486567235912226,
+        "mean_financial_residual_nominal": 454717.3872002051,
+        "mean_financial_residual_biased": 481318.243985164,
+        "affected_scenarios": 20.0
+      },
+      "budget_cut": {
+        "EL": 464833.45862088236,
+        "CVaR": 839742.7182726786,
+        "budget": 160000.0,
+        "capex": 158797.36118301086,
+        "budget_respected": true,
+        "u_reoptimized": [
+          0.22035320069170125,
+          0.10888040504766414,
+          0.008602625351562353,
+          0.2818605081107435,
+          0.19116945225694096
+        ]
+      }
+    }
   }
 }
