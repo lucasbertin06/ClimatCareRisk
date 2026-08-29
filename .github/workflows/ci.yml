@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "Lucas"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install project
+        run: |
+          pip install -e app[dev]
+          pip install -e components/shared_code
+          pip install numpyro
+      - name: Run tests (no Docker images)
+        run: pytest tests -q
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install project
+        run: |
+          pip install -e app[dev]
+          pip install -e components/shared_code
+          pip install tesseract-core numpyro
+      - name: Build Tesseract images
+        run: make build-c0
+      - name: Run full test suite
+        run: make test
