@@ -27,7 +27,7 @@ import torch.nn.functional as F
 
 from climacare_shared.grid import Grid, check_fire_stability
 
-__all__ = ["FIRE_FIELDS", "fire_forward", "fire_step"]
+__all__ = ["FIRE_FIELDS", "fire_forward", "fire_step", "frame_indices"]
 
 FIRE_FIELDS = ("smoke_source", "intensity_frames", "fuel_final", "burned_area")
 
@@ -158,7 +158,7 @@ def _as_tensor(value: Any) -> torch.Tensor:
     return torch.as_tensor(value, dtype=_DTYPE)
 
 
-def _frame_indices(n_steps: int, frame_count: int) -> list[int]:
+def frame_indices(n_steps: int, frame_count: int) -> list[int]:
     """Return ``frame_count`` evenly spaced indices in ``[0, n_steps]``."""
     if frame_count < 1:
         raise ValueError(f"frame_count must be >= 1, got {frame_count}")
@@ -243,7 +243,7 @@ def fire_forward(inputs: dict[str, Any]) -> dict[str, torch.Tensor]:
     fuel_initial = fuel_base * (1.0 - prevention)
     fuel = fuel_initial
 
-    wanted_frames = _frame_indices(n_steps, int(inputs["frame_count"]))
+    wanted_frames = frame_indices(n_steps, int(inputs["frame_count"]))
     frames: list[torch.Tensor] = []
     sources: list[torch.Tensor] = []
     for index in range(n_steps):
