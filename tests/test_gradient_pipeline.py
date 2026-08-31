@@ -112,6 +112,61 @@ def test_wind_gradient_sums_both_paths(
 
 
 @requires_containers
+def test_fuel_prevention_gradient_crosses_both_tesseracts(
+    pipeline: TesseractPipeline,
+) -> None:
+    # A scalar investment level is mapped to a uniform prevention field.
+    # The first gradient proves the FireSpread VJP; the second proves the
+    # complete FireSpread -> SmokeTransport composition.
+    from tesseract_jax import apply_tesseract
+
+    theta = jnp.asarray(pipeline.config.truth)
+    prevention_mask = jnp.ones_like(jnp.asarray(pipeline.config.fuel_base))
+
+    def fire_objective(level: jax.Array) -> jax.Array:
+        prevention = jnp.clip(level, 0.0, 1.0) * prevention_mask
+        fire = apply_tesseract(
+            pipeline.fire_client,
+            pipeline.fire_inputs(theta, 1, prevention),
+            vmap_method="sequential",
+        )
+        return fire["burned_area"]
+
+    def smoke_objective(level: jax.Array) -> jax.Array:
+        prevention = jnp.clip(level, 0.0, 1.0) * prevention_mask
+        fire = apply_tesseract(
+            pipeline.fire_client,
+            pipeline.fire_inputs(theta, 1, prevention),
+            vmap_method="sequential",
+        )
+        smoke = apply_tesseract(
+            pipeline.smoke_client,
+            pipeline.smoke_inputs(theta, fire["smoke_source"], 1),
+            vmap_method="sequential",
+        )
+        return jnp.sum(smoke["sensor_concentration"])
+
+    level = jnp.asarray(0.2, dtype=jnp.float64)
+    fire_gradient = float(jax.grad(fire_objective)(level))
+    smoke_gradient = float(jax.grad(smoke_objective)(level))
+
+    step = 1e-5
+    fire_finite = float(
+        (fire_objective(level + step) - fire_objective(level - step)) / (2.0 * step)
+    )
+    smoke_finite = float(
+        (smoke_objective(level + step) - smoke_objective(level - step)) / (2.0 * step)
+    )
+
+    assert np.isfinite(fire_gradient)
+    assert np.isfinite(smoke_gradient)
+    assert abs(fire_gradient) > 1e-12
+    assert abs(smoke_gradient) > 1e-12
+    assert np.isclose(fire_gradient, fire_finite, rtol=5e-2, atol=1e-8)
+    assert np.isclose(smoke_gradient, smoke_finite, rtol=5e-2, atol=1e-8)
+
+
+@requires_containers
 def test_chain_rule_holds_through_the_reparameterisation(
     pipeline: TesseractPipeline, observations: object
 ) -> None:
