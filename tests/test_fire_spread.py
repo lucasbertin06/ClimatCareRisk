@@ -236,6 +236,35 @@ def test_invalid_cfl_is_rejected_before_the_first_step() -> None:
         fire_forward(make_inputs(dt=0.5))
 
 
+def test_fuel_prevention_reduces_burned_area(tiny_config: object) -> None:
+    config = tiny_config
+    truth = np.asarray(config.truth)
+    base = {
+        "ignition": torch.tensor(truth[:3], dtype=torch.float64),
+        "wind": torch.tensor(config.fire_wind(truth[3]), dtype=torch.float64),
+        "moisture": torch.as_tensor(config.moisture),
+        "fuel_base": torch.as_tensor(config.fuel_base),
+        "dt": config.dt,
+        "n_steps": config.n_steps,
+        "diffusivity": config.fire.diffusivity,
+        "heat_loss": config.fire.heat_loss,
+        "heat_release": config.fire.heat_release,
+        "reaction_rate": config.fire.reaction_rate,
+        "moisture_sensitivity": config.fire.moisture_sensitivity,
+        "ignition_threshold": config.fire.ignition_threshold,
+        "ignition_width": config.fire.ignition_width,
+        "source_sigma": config.fire.source_sigma,
+        "smoke_yield": config.fire.smoke_yield,
+        "wind_speed_bound": config.wind.fire_speed,
+        "frame_count": config.frame_count,
+    }
+    no_prevention = dict(base, fuel_prevention=torch.zeros_like(torch.as_tensor(config.fuel_base)))
+    full_prevention = dict(base, fuel_prevention=torch.ones_like(torch.as_tensor(config.fuel_base)))
+    burned_without = fire_forward(no_prevention)["burned_area"]
+    burned_with = fire_forward(full_prevention)["burned_area"]
+    assert float(burned_with) < float(burned_without)
+
+
 def test_tiny_run_is_stable_and_unsaturated(tiny_config: object) -> None:
     config = tiny_config
     truth = np.asarray(config.truth)

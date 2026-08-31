@@ -37,7 +37,7 @@ class InputSchema(BaseModel):
     fuel_base: Array[(None, None), Float64] = Field(
         description="Baseline fuel fraction F_base in [0, 1]"
     )
-    fuel_prevention: Array[(None, None), Float64] = Field(
+    fuel_prevention: Differentiable[Array[(None, None), Float64]] = Field(
         description="Continuous fuel prevention level u_fuel in [0, 1]"
     )
     dt: Float64 = Field(description="Explicit Euler time step")
@@ -59,6 +59,10 @@ class InputSchema(BaseModel):
         ge=1,
         description="Number of evenly spaced intensity frames to return",
     )
+
+
+_DIFFERENTIABLE_INPUTS = ("ignition", "wind", "fuel_prevention")
+_DIFFERENTIABLE_OUTPUTS = ("smoke_source", "intensity_frames", "fuel_final", "burned_area")
 
 
 class OutputSchema(BaseModel):
