@@ -5,7 +5,12 @@ import typer
 from plume_inversion.optimize import recover
 from plume_inversion.scenario import make_scenario
 
-app = typer.Typer(name="plume_inversion")
+app = typer.Typer(name="plume_inversion", no_args_is_help=True)
+
+
+@app.callback()
+def main() -> None:
+    """Differentiable plume-source inversion tools."""
 
 
 @app.command()

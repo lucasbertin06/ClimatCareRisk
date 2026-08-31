@@ -85,6 +85,14 @@ def test_fuel_is_monotone_and_bounded() -> None:
     assert np.all(source >= 0.0)
     assert float(result["burned_area"]) > 0.0
 
+def test_invalid_normalized_fields_are_rejected() -> None:
+    invalid_fuel = torch.full((24, 24), 1.1, dtype=torch.float64)
+    with pytest.raises(ValueError, match=r"fuel_base must lie in \[0, 1\]"):
+        fire_forward(make_inputs(fuel_base=invalid_fuel))
+    invalid_moisture = torch.full((24, 24), -0.1, dtype=torch.float64)
+    with pytest.raises(ValueError, match=r"moisture must lie in \[0, 1\]"):
+        fire_forward(make_inputs(moisture=invalid_moisture))
+
 
 def test_without_reaction_a_zero_field_stays_zero() -> None:
     """An exactly zero intensity is a fixed point when the reaction vanishes."""

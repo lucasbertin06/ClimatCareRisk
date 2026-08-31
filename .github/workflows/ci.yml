@@ -18,6 +18,10 @@ jobs:
           pip install -e app[dev]
           pip install -e components/shared_code
           pip install numpyro
+      - name: Build local smoke kernel
+        run: make smoke-kernel
+      - name: Run kernel tests
+        run: python -m pytest tests/test_smoke_transport.py -q
       - name: Run tests (no Docker images)
         run: python -m pytest tests -q
 

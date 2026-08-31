@@ -10,11 +10,8 @@ from climacare_shared.kernel import load_smoke_kernel
 
 @pytest.fixture(scope="module")
 def smoke_kernel() -> object:
-    """Return the compiled C++ kernel, skipping when it is not built."""
-    try:
-        return load_smoke_kernel()
-    except ImportError as error:  # pragma: no cover - environment dependent
-        pytest.skip(str(error))
+    """Return the compiled C++ kernel; CI must build it before this suite."""
+    return load_smoke_kernel()
 
 
 NX = NY = 16

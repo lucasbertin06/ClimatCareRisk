@@ -32,6 +32,21 @@ def test_configuration_rejects_an_unstable_time_step(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="CFL violated"):
         load_tiny_config(broken)
 
+def test_configuration_rejects_invalid_sensor_shapes(tmp_path: Path) -> None:
+    source = (REPOSITORY / "configs" / "tiny.yaml").read_text(encoding="utf-8")
+    broken = tmp_path / "bad-sensors.yaml"
+    broken.write_text(source.replace("bias: [0.0, 0.0, 0.0]", "bias: [0.0]"), encoding="utf-8")
+    with pytest.raises(ValueError, match="must both have shape"):
+        load_tiny_config(broken)
+
+
+def test_configuration_rejects_non_finite_scalars(tmp_path: Path) -> None:
+    source = (REPOSITORY / "configs" / "tiny.yaml").read_text(encoding="utf-8")
+    broken = tmp_path / "nan.yaml"
+    broken.write_text(source.replace("heat_loss: 0.20", "heat_loss: .nan"), encoding="utf-8")
+    with pytest.raises(ValueError, match="must all be finite"):
+        load_tiny_config(broken)
+
 
 def _abstract(payload: dict) -> dict:
     """Turn a concrete payload into the shape/dtype form abstract_eval expects."""

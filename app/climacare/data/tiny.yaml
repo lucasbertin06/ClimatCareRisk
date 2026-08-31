@@ -1,0 +1,63 @@
+# ClimaCare-Risk Tiny synthetic benchmark configuration.
+case: tiny
+seed: 20260805
+grid:
+  nx: 32
+  ny: 32
+time:
+  dt: 0.02
+  n_steps: 60
+wind:
+  phi_base_deg: 35.0
+  fire_speed: 0.35
+  smoke_speed: 0.45
+  delta_phi_max: 0.35
+fire:
+  diffusivity: 2.0e-4
+  heat_loss: 0.20
+  heat_release: 0.80
+  reaction_rate: 6.0
+  moisture_sensitivity: 1.2
+  ignition_threshold: 0.50
+  ignition_width: 0.05
+  source_sigma: 0.055
+  smoke_yield: 1.0
+  moisture: 0.15
+  fuel_base: 1.0
+  fuel_prevention: 0.0
+smoke:
+  diffusivity: 1.5e-4
+  decay: 0.5
+truth:
+  x0: 0.30
+  y0: 0.28
+  log_amplitude: 0.1823215568
+  delta_phi: 0.12
+initial_guess:
+  x0: 0.45
+  y0: 0.42
+  log_amplitude: 0.0
+  delta_phi: -0.05
+priors:
+  margin: 0.0625
+  log_amplitude_mean: 0.0
+  log_amplitude_std: 0.5
+  delta_phi_std: 0.15
+sensors:
+  positions:
+    - [0.55, 0.55]
+    - [0.72, 0.66]
+    - [0.66, 0.44]
+  bias: [0.0, 0.0, 0.0]
+  noise_std: [0.02, 0.02, 0.02]
+  mask_fraction: 0.05
+output:
+  frame_count: 13
+optimization:
+  optimizer: lbfgs
+  iterations: 30
+  learning_rate: 0.04
+gradient_check:
+  epsilon: 1.0e-4
+  step_factors: [0.5, 1.0, 2.0]
+  absolute_floor: 1.0e-8

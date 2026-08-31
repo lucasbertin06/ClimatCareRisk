@@ -30,9 +30,8 @@ def simulate_scenarios(
     zones : list[HealthZone],
     cell_area : float,
     filter_level: float = 0.0,) -> dict :
-    # Thin wrapper around src.generate_scenario (the single scenario generator),
-    # kept so older call sites keep working. Returns a dict instead of a class.
-    from src.generate_scenario import generate_scenario
+    # Thin wrapper around the canonical installable scenario generator.
+    from climacare.scenario_generation import generate_scenario
 
     config = pipeline.config
     scenarios_fire, scenarios_H_r = generate_scenario(

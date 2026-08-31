@@ -12,7 +12,7 @@ Tesseract-JAX composes the components. In reverse mode, the smoke cotangent pass
 
 ## Results
 
-The committed [direct-run artifact](results/tiny_direct/tiny_direct.json) records a burned-area fraction of **0.125**, total incremental health impact of **1,086.6**, and physical loss of **1,086.7**. The committed [pipeline portfolio artifact](results/portfolio_e5_pipeline.json) reports a **98.4%** reduction in expected loss for the optimized allocation relative to the uniform policy under its synthetic scenarios.
+The committed [direct-run artifact](results/tiny_direct/tiny_direct.json) predates the cell-area correction and is retained only as historical output. New direct runs use the grid cell area when computing health impacts. The committed synthetic portfolio artifact includes investment cost in expected and tail losses; policies are therefore compared on total cost rather than mitigation benefit alone.
 
 ### Coupled fields
 
@@ -20,9 +20,9 @@ The animation contains 13 evenly spaced snapshots from a 60-step run over $t \in
 
 ### Downstream diagnostics
 
-![Incremental health impact: urban 555.3, rural 43.1, vulnerable 488.2](docs/assets/health_impacts.png)
+![Historical health-impact figure from the pre-correction direct artifact](docs/assets/health_impacts.png)
 
-![Expected loss and CVaR by policy, followed by the eight-point budget frontier](docs/assets/portfolio_outcomes.png)
+![Historical portfolio figure; regenerate after producing a matching pipeline artifact](docs/assets/portfolio_outcomes.png)
 
 ## How the gradient crosses the pipeline
 
@@ -82,6 +82,12 @@ The synthetic portfolio path runs without Docker:
 python -m climacare.cli portfolio --fake --output-dir results/portfolio_fake
 ```
 
+The standalone plume inversion CLI exposes an explicit subcommand:
+
+```bash
+plume_inversion run --steps 120
+```
+
 The visual assets use the local PyTorch solver and compiled C++ smoke kernel:
 
 ```bash
@@ -134,7 +140,7 @@ The direct, MAP, and UQ commands record dependency versions and the source revis
 python -m pytest tests -q
 ```
 
-The test suite covers the local numerical kernels, direct composition, cross-component gradients, inversion, health calculations, smoke transport, fire spread, and portfolio loss structure. CI runs it twice: first without Docker images, then after building both Tesseracts.
+The test suite covers the local numerical kernels, direct composition, cross-component gradients, inversion, health calculations, smoke transport, fire spread, and portfolio loss structure. CI compiles and tests the local C++ smoke kernel explicitly; container-dependent tests run again after both Tesseract images are built.
 
 For the mathematical model, discretizations, adjoint equations, stability conditions, and benchmark limits, see the [mathematical specification](docs/mathematical_specification.md).
 

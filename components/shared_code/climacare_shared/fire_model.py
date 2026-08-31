@@ -20,6 +20,7 @@ Everything is written functionally on ``torch.float64`` tensors so that
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import torch
@@ -187,12 +188,23 @@ def fire_forward(inputs: dict[str, Any]) -> dict[str, torch.Tensor]:
     moisture = _as_tensor(inputs["moisture"])
     fuel_base = _as_tensor(inputs["fuel_base"])
     prevention = _as_tensor(inputs["fuel_prevention"])
+    if moisture.ndim != 2:
+        raise ValueError(f"moisture must be a two-dimensional field, got {tuple(moisture.shape)}")
     if moisture.shape != fuel_base.shape or moisture.shape != prevention.shape:
         raise ValueError(
             "moisture, fuel_base and fuel_prevention must share a shape, got "
             f"{tuple(moisture.shape)}, {tuple(fuel_base.shape)}, "
             f"{tuple(prevention.shape)}"
         )
+    for label, field in (
+        ("moisture", moisture),
+        ("fuel_base", fuel_base),
+        ("fuel_prevention", prevention),
+    ):
+        if not bool(torch.all(torch.isfinite(field))):
+            raise ValueError(f"{label} must contain only finite values")
+        if not bool(torch.all((field >= 0.0) & (field <= 1.0))):
+            raise ValueError(f"{label} must lie in [0, 1]")
 
     ny, nx = int(moisture.shape[0]), int(moisture.shape[1])
     grid = Grid(nx=nx, ny=ny)
@@ -211,10 +223,25 @@ def fire_forward(inputs: dict[str, Any]) -> dict[str, torch.Tensor]:
     source_sigma = float(inputs["source_sigma"])
     smoke_yield = float(inputs["smoke_yield"])
     wind_speed_bound = float(inputs["wind_speed_bound"])
-    if source_sigma <= 0.0:
-        raise ValueError(f"source_sigma must be positive, got {source_sigma}")
-    if smoke_yield <= 0.0:
-        raise ValueError(f"smoke_yield must be positive, got {smoke_yield}")
+    scalars = (
+        dt,
+        diffusivity,
+        heat_loss,
+        heat_release,
+        reaction_rate,
+        moisture_sensitivity,
+        ignition_threshold,
+        ignition_width,
+        source_sigma,
+        smoke_yield,
+        wind_speed_bound,
+    )
+    if not all(math.isfinite(value) for value in scalars):
+        raise ValueError("FireSpread scalar inputs must all be finite")
+    if heat_release <= 0.0 or source_sigma <= 0.0 or smoke_yield <= 0.0:
+        raise ValueError("heat_release, source_sigma and smoke_yield must be positive")
+    if moisture_sensitivity < 0.0 or wind_speed_bound < 0.0:
+        raise ValueError("moisture_sensitivity and wind_speed_bound must be non-negative")
 
     check_fire_stability(
         dt=dt,
@@ -226,8 +253,14 @@ def fire_forward(inputs: dict[str, Any]) -> dict[str, torch.Tensor]:
         ignition_width=ignition_width,
     )
 
-    ignition = _as_tensor(inputs["ignition"]).reshape(3)
-    wind = _as_tensor(inputs["wind"]).reshape(2)
+    ignition = _as_tensor(inputs["ignition"])
+    wind = _as_tensor(inputs["wind"])
+    if ignition.shape != (3,) or wind.shape != (2,):
+        raise ValueError(
+            f"ignition and wind must have shapes (3,) and (2,), got {tuple(ignition.shape)} and {tuple(wind.shape)}"
+        )
+    if not bool(torch.all(torch.isfinite(ignition))) or not bool(torch.all(torch.isfinite(wind))):
+        raise ValueError("ignition and wind must contain only finite values")
     x0, y0, log_amplitude = ignition[0], ignition[1], ignition[2]
     vx, vy = wind[0], wind[1]
 

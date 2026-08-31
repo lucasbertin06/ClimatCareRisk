@@ -18,6 +18,8 @@ dependencies = [
     "numpyro>=0.15",
     "torch>=2.0",
     "numpy>=2.0",
+    "pyyaml>=6.0",
+    "plume-inversion-shared>=0.2.0",
     "pandas>=2.2",
     "pyproj>=3.6",
     "rasterio>=1.4",
@@ -33,11 +35,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
-    # For running app/chain.ipynb
+    "pybind11>=2.12",
     "jupyter",
     "matplotlib",
-    "numpy",
-    "pyyaml",
     "certifi",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
@@ -45,32 +45,13 @@ dev = [
     "plotly>=5.24",
     "streamlit>=1.40",
 ]
-visualization = [
-    "matplotlib",
-    "plotly",
-    "streamlit",
-]
-data = [
-    "pandas",
-    "pyyaml",
-    "rasterio",
-    "requests",
-    "scipy",
-    "shapely",
-]
-modal = [
-    "modal",
-]
+visualization = ["matplotlib", "plotly", "streamlit"]
+data = ["pandas", "pyyaml", "rasterio", "requests", "scipy", "shapely"]
+modal = ["modal"]
 
 [project.scripts]
-"plume_inversion" = "plume_inversion.main:entrypoint"
+plume_inversion = "plume_inversion.main:entrypoint"
 
-# Version is derived from git tags via hatch-vcs. Tag a release (e.g. `git tag
-# v0.1.0`) to set the version; between tags it is inferred from the latest tag
-# plus commit distance. `raw-options.root` points at the repository root one
-# level up, since this package lives in the `app/` subdirectory of the monorepo.
-# `fallback-version` keeps builds working when git metadata is unavailable
-# (e.g. building from an sdist or outside a checkout).
 [tool.hatch.version]
 source = "vcs"
 fallback-version = "0.0.0+unknown"
@@ -81,3 +62,6 @@ version-file = "plume_inversion/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["plume_inversion", "climacare"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"climacare/data/tiny.yaml" = "climacare/data/tiny.yaml"

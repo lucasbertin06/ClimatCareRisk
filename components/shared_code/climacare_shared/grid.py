@@ -63,9 +63,14 @@ class Grid:
         """Return ``(X, Y)`` broadcast over ``(ny, nx)``."""
         return np.meshgrid(self.centres_x(), self.centres_y(), indexing="xy")
 
-    def interior_bounds(self, margin_cells: float = 1.0) -> tuple[float, float]:
-        """Return the coordinate window that keeps a bilinear stencil in range."""
-        return (margin_cells * self.dx, 1.0 - margin_cells * self.dx)
+    def interior_bounds(
+        self, margin_cells: float = 1.0
+    ) -> tuple[tuple[float, float], tuple[float, float]]:
+        """Return bilinear-safe coordinate windows for the x and y axes."""
+        return (
+            (margin_cells * self.dx, 1.0 - margin_cells * self.dx),
+            (margin_cells * self.dy, 1.0 - margin_cells * self.dy),
+        )
 
 
 def wind_vector(speed: float, phi_base: float, delta_phi: float) -> tuple[float, float]:
@@ -227,6 +232,8 @@ def bilinear_weights(
     coords = np.asarray(positions, dtype=np.float64)
     if coords.ndim != 2 or coords.shape[1] != 2:
         raise ValueError(f"sensor positions must have shape (S, 2), got {coords.shape}")
+    if not np.all(np.isfinite(coords)):
+        raise ValueError("sensor positions must all be finite")
 
     gx = coords[:, 0] / grid.dx - 0.5
     gy = coords[:, 1] / grid.dy - 0.5
@@ -235,15 +242,16 @@ def bilinear_weights(
     fx = gx - i0
     fy = gy - j0
 
+    x_bounds, y_bounds = grid.interior_bounds()
     if np.any(i0 < 0) or np.any(i0 + 1 > grid.nx - 1):
         raise ValueError(
             "sensor x coordinate outside the bilinear-safe window "
-            f"{grid.interior_bounds()} : {coords[:, 0].tolist()}"
+            f"{x_bounds} : {coords[:, 0].tolist()}"
         )
     if np.any(j0 < 0) or np.any(j0 + 1 > grid.ny - 1):
         raise ValueError(
             "sensor y coordinate outside the bilinear-safe window "
-            f"{grid.interior_bounds()} : {coords[:, 1].tolist()}"
+            f"{y_bounds} : {coords[:, 1].tolist()}"
         )
 
     weights = np.empty((coords.shape[0], 2, 2), dtype=np.float64)

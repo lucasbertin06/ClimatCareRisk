@@ -1,7 +1,15 @@
 import jax.numpy as jnp
 import pytest
 
-from loss_structure import COST, optimize_portfolio, robust_objective, run_stress_tests, total_loss
+from loss_structure import (
+    COST,
+    evaluate_policy,
+    generate_efficient_frontier,
+    optimize_portfolio,
+    robust_objective,
+    run_stress_tests,
+    total_loss,
+)
 
 
 def _fake_scenarios(n=20):
@@ -51,3 +59,34 @@ def test_run_stress_tests_increases_risk():
 
     # Strong wind must increase expected loss (EL) compared to nominal
     assert results["wind_strong"]["EL"] >= results["nominal"]["EL"]
+
+
+def test_objective_includes_investment_cost():
+    health = jnp.zeros((4, 3))
+    fire = jnp.zeros(4)
+    assert robust_objective(jnp.ones(5), health, fire, None, 0.0) > robust_objective(
+        jnp.zeros(5), health, fire, None, 0.0
+    )
+
+
+def test_optimizer_history_is_monotone_and_budget_is_exact():
+    health, fire = _fake_scenarios()
+    budget = 200_000.0
+    portfolio, history = optimize_portfolio(
+        health, fire, budget_max=budget, steps=5, return_history=True
+    )
+    assert jnp.all(history[1:] <= history[:-1] + 1e-6)
+    assert jnp.sum(portfolio * COST["unit_costs"]) <= budget + 1e-6
+
+
+def test_negative_budget_is_rejected():
+    health, fire = _fake_scenarios()
+    with pytest.raises(ValueError, match="non-negative"):
+        optimize_portfolio(health, fire, budget_max=-1.0)
+
+
+def test_frontier_total_loss_is_non_increasing():
+    health, fire = _fake_scenarios()
+    portfolios, _, _, _, _ = generate_efficient_frontier(health, fire, 3)
+    expected = jnp.asarray([evaluate_policy(u, health, fire)[0] for u in portfolios])
+    assert jnp.all(expected[1:] <= expected[:-1] + 1e-6)
