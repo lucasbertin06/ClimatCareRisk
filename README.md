@@ -1,203 +1,197 @@
 # ClimaCare-Risk
 
-Differentiable Digital Twin for Health and Financial Resilience Against Wildfires
+**Differentiable wildfire inference, fuel prevention, health exposure and resilience finance across PyTorch, C++ and JAX.**
 
-A single differentiable computation chain linking fire spread → smoke transport → health exposure → financial risk and allocation, composed across four heterogeneous Tesseract components. Built for the **Tesseract Hackathon 2026** (track: *Differentiable inference & uncertainty quantification*).
+ClimaCare-Risk was built for the [Tesseract Hackathon 2026](https://pasteurlabs.ai/tesseract-hackathon-2026/) in the **Differentiable inference & uncertainty quantification** track. It composes two heterogeneous Tesseracts into one differentiable scientific workflow:
 
----
+- `fire_spread_torch`: reaction–diffusion–advection wildfire model in PyTorch, differentiated by PyTorch VJP;
+- `smoke_transport_cpp`: C++20/OpenMP smoke transport model, differentiated by a hand-written discrete adjoint.
 
-## Key Features
+Health and finance are downstream JAX modules. The Tiny benchmark uses documented synthetic data so that the ground truth is known and gradients can be checked quantitatively. It is a research demonstrator, not an operational wildfire forecast, clinical model or financial recommendation.
 
-- **Cross-Language Differentiable Composition**: `fire_spread_torch` (PyTorch, native autodiff) and `smoke_transport_cpp` (C++20/OpenMP, hand-written discrete adjoint) are composed inside a single `jax.value_and_grad` call via Tesseract-JAX. The gradient crosses the container boundary with no intermediate file and no host-side solver execution.
-- **Verified Adjoint Correctness**: the C++ discrete adjoint passes a dot-product identity test (`⟨v, Ju⟩ = ⟨Jᵀv, u⟩`) and its cotangents match centred finite differences on the wind parameter.
-- **Full Bayesian Inference Stack**: MAP estimation (L-BFGS/Adam), Laplace approximation, and NUTS posterior refinement (NumPyro) directly on top of the composed gradient — not on a surrogate.
-- **Gradients That Do Real Work**: the composed pipeline drives a robust portfolio allocation under CVaR risk, reducing expected loss from **$88.2k (uniform policy)** to **$1.4k (optimized)** on the real physics pipeline — a **~63× reduction** — subject to a capex budget constraint.
-- **Reproducible by Design**: every experiment (`direct`, `map`, `uq`, `portfolio`) runs through one CLI entry point and writes a self-describing JSON artifact (git commit, package versions, CFL numbers included).
+![Tiny synthetic case: coupled fire intensity and smoke concentration over time](docs/assets/tiny_fire_smoke.gif)
 
-For the full derivation (discretization, adjoint, likelihood, CVaR, budget constraints), see [`docs/mathematical_specification.md`](docs/mathematical_specification.md).
+## Why Tesseract is load-bearing
 
----
+```text
+physical parameters θ or prevention level u_fuel
+                    │
+                    ▼
+┌────────────────────────────────┐
+│ FireSpread Tesseract           │  PyTorch · native autodiff/VJP
+└───────────────┬────────────────┘
+                │ smoke source S[n,y,x]
+                ▼
+┌────────────────────────────────┐
+│ SmokeTransport Tesseract       │  C++20/OpenMP · discrete adjoint
+└───────────────┬────────────────┘
+                │ sensor concentrations
+                ▼
+         JAX objective / loss
+```
 
-## Table of Contents
+A single JAX function calls both containers through `tesseract_jax.apply_tesseract`. Reverse mode first invokes the C++ adjoint, then passes the smoke-source cotangent into the PyTorch VJP. The composed gradients are compared with centred finite differences in the test suite.
 
-- [Key Features](#key-features)
-- [About this Project](#about-this-project)
-  - [Architecture](#architecture)
-  - [Differentiable Composition](#differentiable-composition)
-- [Numerical Experiments](#numerical-experiments)
-  - [Performance Summary](#performance-summary)
-- [Repository Structure](#repository-structure)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation and Build](#installation-and-build)
-  - [Reproducing the Results](#reproducing-the-results)
-  - [Troubleshooting](#troubleshooting)
-- [Future Work](#future-work)
-- [Tech Stack](#tech-stack)
-- [License](#license)
-- [Status](#status)
+## Gradient-driven fuel prevention
 
----
+The intervention experiment optimizes a continuous fuel-treatment level through both Tesseracts:
 
-## About this Project
+```text
+u_fuel → fuel_prevention field → fire → smoke → coupled objective
+```
 
-### Architecture
+The committed run starts from `u_fuel = 0.20` and reaches `0.806` in eight gradient steps:
 
-Four heterogeneous components, composed via [Tesseract](https://docs.pasteurlabs.ai/projects/tesseract-core/latest/):
+| Metric | Initial | Optimized | Change |
+|---|---:|---:|---:|
+| Coupled objective | 0.2944 | 0.0592 | −79.9% |
+| Burned-area fraction | 0.0855 | 0.0067 | −92.1% |
+| Mean sensor smoke exposure | 0.2069 | 0.0201 | −90.3% |
 
-| Component | Role | Language / differentiation |
-|---|---|---|
-| `fire_spread_torch` | Fire propagation (reaction–diffusion–advection) | PyTorch, native autodiff |
-| `smoke_transport_cpp` | Atmospheric smoke transport | C++20/OpenMP, hand-written discrete adjoint |
-| HealthImpact | Exposure and health burden | JAX, native autodiff |
-| ResilienceFinance | Expected loss, CVaR, portfolio allocation | JAX/Python |
+![Gradient-based prevention optimization](docs/assets/prevention_optimization.png)
 
-The orchestrator (`app/climacare`) serves the first two as Tesseracts and drives Bayesian inference and robust optimization on top.
+The gradient of burned area and sensor smoke concentration with respect to `u_fuel` is finite, non-zero and agrees with centred finite differences.
 
-### Differentiable Composition
+## Inference, UQ and downstream decision support
 
-θ (ignition, wind) -> [fire_spread_torch] -> smoke_source -> [smoke_transport_cpp] -> sensor_concentration -> loss
-PyTorch autodiff C++ hand-written adjoint
+The same composed pipeline supports:
 
-A single JAX function (`TesseractPipeline.sensor_predictions`) calls both containers through `tesseract_jax.apply_tesseract`. `jax.value_and_grad` of the downstream loss therefore triggers the C++ adjoint first, and feeds its smoke-source cotangent straight into the PyTorch VJP — the composition genuinely crosses the language and differentiation-strategy boundary the hackathon asks for, it is not two solvers glued by a shared script.
+1. direct fire→smoke simulation;
+2. end-to-end gradient validation;
+3. MAP reconstruction of ignition position, amplitude and wind correction;
+4. Laplace uncertainty approximation and optional NumPyro NUTS;
+5. downstream health impacts and CVaR portfolio analysis over posterior scenarios;
+6. budget frontiers and wind, sensor-bias and budget-cut stress tests.
 
----
+The portfolio optimizer is intentionally downstream: it optimizes continuous financial decisions over precomputed posterior physics scenarios. The fuel-prevention experiment above is the intervention that is optimized directly through both Tesseracts.
 
-## Numerical Experiments
+![Incremental health impacts for the three Tiny zones](docs/assets/health_impacts.png)
 
-The Tiny case (32×32 grid, 60 steps, single ignition point) validates the pipeline end to end:
+![Policy comparison and budget-risk frontier](docs/assets/portfolio_outcomes.png)
 
-| Experiment | Metric | Result |
-|---|---|---|
-| E1 — Direct simulation | Burned area | 0.125 (fraction of domain) |
-| E1 — Direct simulation | Smoke transport CFL number | 0.429 (stable) |
-| E2 — Gradient check | Composed VJP vs. centred finite differences | matches within tolerance, all components finite and sign-consistent |
-| E3 — MAP inversion | Ignition position recovery | converges from the prior guess to the synthetic truth |
-| E4 — UQ | Laplace + NUTS posterior over 4 physical parameters | — |
+### Committed Tiny results
 
-### Performance Summary
-
-Robust portfolio allocation (E5/E6), real pipeline (not the synthetic fallback), 20 candidate mitigation actions, CVaR level λ = 0.5:
-
-| Policy | Expected Loss | CVaR | Capex |
-|---|---|---|---|
+| Policy | Expected loss | CVaR | Capex |
+|---|---:|---:|---:|
 | Uniform | $88,182 | $146,466 | $180,000 |
-| Insurance-only | $124,847 | $183,093 | $150,000 |
-| **Optimized (ours)** | **$1,393** | **$41,107** | $561,297 |
+| Insurance only | $124,847 | $183,093 | $150,000 |
+| **Optimized downstream allocation** | **$1,393** | **$41,107** | $561,297 |
 
-Objective value $\mathcal{J}$ (loss + CVaR penalty) drops from **$161,415 → $21,947** over the optimization (initial → final). Stress tests (strong wind, biased sensors, 20% budget cut) confirm the optimized allocation stays within budget and degrades gracefully.
+The real pipeline artifact is [`results/portfolio_e5_pipeline.json`](results/portfolio_e5_pipeline.json). The prevention artifact is [`results/prevention/prevention.json`](results/prevention/prevention.json).
 
----
+## Repository structure
 
-## Repository Structure
+```text
+app/climacare/
+  pipeline.py        # FireSpread → SmokeTransport composition
+  inverse.py         # gradient check and MAP
+  uq.py              # Laplace approximation and NUTS
+  prevention.py      # end-to-end u_fuel optimization
+  health.py          # exposure and synthetic health impact
+  finance.py         # downstream risk primitives
+  cli.py             # reproducible experiment commands
+components/tesseracts/
+  fire_spread_torch/ # PyTorch Tesseract
+  smoke_transport_cpp/ # C++/OpenMP Tesseract
+components/shared_code/ # shared physical kernels
+configs/tiny.yaml
+scripts/             # portfolio, benchmark and visualization scripts
+tests/               # unit and container integration tests
+results/             # reproducible JSON artifacts
+docs/mathematical_specification.md
+```
 
-ClimatCareRisk/  
-├── app/climacare/ # Orchestrator: pipeline, inference, UQ, finance, CLI  
-│ ├── pipeline.py # Composed FireSpread → SmokeTransport, jax.value_and_grad  
-│ ├── inverse.py # Gradient check + MAP (L-BFGS / Adam)  
-│ ├── uq.py # Laplace approximation + NUTS (NumPyro)  
-│ ├── finance.py # CVaR, portfolio optimization, stress tests  
-│ ├── health.py # Exposure → health impact  
-│ └── cli.py # python -m climacare.cli {direct,map,uq,portfolio}  
-│  
-├── components/  
-│ ├── tesseracts/  
-│ │ ├── fire_spread_torch/ # Tesseract A — PyTorch autodiff  
-│ │ └── smoke_transport_cpp/ # Tesseract B — C++20/OpenMP, hand-written adjoint  
-│ └── shared_code/ # Physics kernels shared between components and orchestrator  
-│  
-├── src/ # Scenario generation, loss structure, health model  
-├── scripts/ # Portfolio experiments, benchmarks  
-├── tests/ # pytest suite (unit + container-dependent, auto-skipped)  
-├── docs/mathematical_specification.md  
-├── configs/tiny.yaml # Tiny case configuration  
-├── results/ # Reproducible experiment outputs (JSON)  
-└── Makefile   
+The archived `archive/wildfire_prototype/` is an incomplete post-C0 real-data prototype and is not part of the reproducible submission pipeline.
 
-## Getting Started
+## Installation
 
 ### Prerequisites
 
-- Python ≥ 3.12
-- [Docker](https://docs.docker.com/get-docker/) (to build and serve the Tesseract images)
-- GNU Make
-- A C++20 compiler + [CMake](https://cmake.org/) ≥ 3.22 (to compile the smoke-transport kernel locally, e.g. for tests)
-
-### Installation and Build
+- Python 3.12+
+- Docker Desktop
+- Tesseract Core 1.11.0 and Tesseract-JAX 0.4.1
+- GNU Make for the shortcuts below (or run the commands directly)
 
 ```bash
 git clone https://github.com/lucasbertin06/ClimatCareRisk.git
 cd ClimatCareRisk
-pip install -e app -e components/shared_code
-
-make build-c0     # build + tag the fire_spread_torch and smoke_transport_cpp Docker images
-make smoke-kernel # compile the C++ kernel locally (cmake), used by the unit tests
+python -m pip install -e app -e components/shared_code
+make build-c0
 ```
 
-> [!NOTE]
-> `tesseract-core` also exposes a no-Docker debugging mode (`Tesseract.from_tesseract_api`) that imports a component's `tesseract_api.py` directly in-process. It's how the composed gradient can be sanity-checked without building any image, and it's what the test suite falls back to when Docker images aren't available (skipping the container-only tests instead of failing).
-
-### Reproducing the Results
-
-All experiments run through a single entry point, `climacare.cli`:
+On Windows, if `tesseract` is not on `PATH`:
 
 ```bash
-python -m climacare.cli direct    --output-dir results/tiny_direct         # E1: direct fire -> smoke simulation
-python -m climacare.cli map       --output-dir results/tiny_map            # E2/E3: gradient check + inverse problem (MAP)
-python -m climacare.cli uq        --output-dir results/tiny_uq [--nuts]    # E4: Laplace posterior, optional NUTS refinement
-python -m climacare.cli portfolio --output-dir results/portfolio [--fake]  # E5/E6: robust portfolio + stress tests
+make TESSERACT='C:/Users/Alexis/AppData/Local/Python/pythoncore-3.14-64/Scripts/tesseract.exe' build-c0
 ```
 
-Equivalent shortcuts via `make`:
+## Reproduce the experiments
 
 ```bash
-make tiny-direct    # E1
-make tiny-gradient  # E2 (dedicated gradient test)
-make tiny-map       # E2 + E3
-make test           # full test suite
+# E1: direct fire→smoke run
+python -m climacare.cli direct --output-dir results/tiny_direct
+
+# E2/E3: gradient check and MAP inversion
+python -m climacare.cli map --output-dir results/tiny_map
+
+# E4: Laplace UQ, optionally NUTS
+python -m climacare.cli uq --output-dir results/tiny_uq
+
+# End-to-end intervention optimized through both Tesseracts
+python -m climacare.cli prevention --output-dir results/prevention
+
+# E5/E6: downstream portfolio and stress tests
+python -m climacare.cli portfolio --output-dir results/portfolio
+
+# Full test suite
+python -m pytest tests -q
 ```
 
-`portfolio --fake` uses synthetic scenarios and needs no Docker images; without `--fake`, the command chains MAP → Laplace → posterior sampling → simulation through the real Tesseract pipeline and requires `make build-c0` beforehand. For finer-grained variants (number of scenarios, posterior spread, CVaR level...):
+Make shortcuts:
 
 ```bash
-python scripts/run_portfolio_experiment.py --help
+make tiny-direct
+make tiny-gradient
+make tiny-map
+make test
 ```
 
-Results are written as reproducible JSON files under `results/` (git commit, package versions, and CFL numbers are recorded alongside every run).
+## Rebuild the visual assets
 
-### Troubleshooting
+```bash
+python scripts/generate_visualizations.py
+```
 
-| Issue | Solution |
-|---|---|
-| `Tesseract images fire_spread_torch and smoke_transport_cpp must be built first` | Run `make build-c0` (needs Docker), or rely on the container-dependent tests being skipped |
-| `compiled kernel 'smoke_kernel_cpp' not found` | Run `make smoke-kernel`, or set `CLIMACARE_SMOKE_KERNEL_DIR` to the build directory |
-| `pybind11 is required to build smoke_transport_cpp` | `pip install pybind11` before `make smoke-kernel` |
-| Import error on `tesseract_core.runtime.cli` (missing `lz4` etc.) | `pip install "tesseract-core[runtime]"` |
-| Docker unavailable in a sandbox/CI environment | Use `Tesseract.from_tesseract_api(...)` to run components in-process for debugging (see above) |
+The GIF requires the locally compiled C++ smoke kernel (`make smoke-kernel`). If the GIF already exists, the script keeps it and regenerates the PNG result figures from the committed JSON artifacts.
 
----
+## Scope and known limitations
 
-## Future Work
+- The submitted C0 case is synthetic and dimensionless by design.
+- Health and economic coefficients are illustrative.
+- The downstream portfolio optimizer uses precomputed posterior scenarios; only `u_fuel` is currently optimized directly through both physical Tesseracts.
+- The sensor-bias stress may be absorbed by insurance and reserve in a well-funded portfolio; constrained-budget diagnostics are stored in the portfolio artifact.
+- The archived real-data prototype depends on unavailable `wildfire_shared` modules and is future work.
 
-- Extend the physical model beyond the Tiny case (larger grids, multiple ignition points, time-varying wind fields).
-- Replace the fixed sensor network with a differentiable sensor-placement optimization.
-- Explore full-posterior (NUTS-only) portfolio optimization instead of the current Laplace-approximation shortcut.
+For equations, stability conditions, adjoint definitions, likelihood and CVaR formulation, see [`docs/mathematical_specification.md`](docs/mathematical_specification.md).
 
----
+## Tests
 
-## Tech Stack
+The test suite covers:
 
-- **Composition**: [Tesseract-Core](https://docs.pasteurlabs.ai/projects/tesseract-core/latest/) 1.11.0, [Tesseract-JAX](https://github.com/pasteurlabs/tesseract-jax) 0.4.1
-- **Differentiable computing**: JAX 0.11.0, PyTorch (autodiff), C++20/OpenMP (hand-written adjoint)
-- **Inference**: NumPyro (SVI, NUTS), SciPy (L-BFGS-B), Optax (Adam)
-- **Build**: CMake ≥ 3.22, pybind11, Docker
+- FireSpread and SmokeTransport invariants;
+- discrete-adjoint dot products;
+- end-to-end VJP versus centred finite differences;
+- prevention gradients through both Tesseracts;
+- MAP, health, finance, scenario generation and stress tests.
 
----
+Container-dependent tests are skipped when the required Docker images are unavailable.
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE).
+Apache License 2.0 — see [`LICENSE`](LICENSE).
 
-## Status
+## Team
 
-Research prototype built for the Tesseract Hackathon 2026 (August 4–31, 2026). The health, insurance, and economic results shown are demonstration hypotheses: they do not constitute an operational forecast, nor clinical or financial advice.
+- Marko Sinadinovic — scientific modeling and validation
+- Antoine — HPC, kernels and inference
+- Lucas (Volta) — sustainable finance, CVaR, resilience allocation and integration

@@ -35,6 +35,7 @@ from climacare_shared.kernel import KernelNotBuiltError, load_smoke_kernel
 DEFAULT_OUTPUT_DIR = ROOT / "docs" / "assets"
 DIRECT_RESULT = ROOT / "results" / "tiny_direct" / "tiny_direct.json"
 PORTFOLIO_RESULT = ROOT / "results" / "portfolio_e5_pipeline.json"
+PREVENTION_RESULT = ROOT / "results" / "prevention" / "prevention.json"
 
 INK = "#0B1820"
 PANEL = "#102630"
@@ -435,6 +436,50 @@ def render_portfolio_outcomes(portfolio: dict[str, Any], output_path: Path) -> N
     plt.close(figure)
 
 
+def render_prevention_optimization(prevention: dict[str, Any], output_path: Path) -> None:
+    result = prevention["result"]
+    iterations = np.arange(len(result["objective_history"]))
+    figure, axes = plt.subplots(1, 2, figsize=(11.4, 4.8), facecolor=INK)
+    figure.subplots_adjust(left=0.08, right=0.97, bottom=0.17, top=0.78, wspace=0.3)
+    figure.suptitle("END-TO-END FUEL PREVENTION OPTIMIZATION", color=TEXT, fontsize=15, weight="bold")
+
+    for axis in axes:
+        axis.set_facecolor(PANEL)
+        axis.tick_params(colors=MUTED)
+        axis.grid(color=GRID, alpha=0.45, linewidth=0.8)
+        for spine in axis.spines.values():
+            spine.set_color(GRID)
+
+    axes[0].plot(iterations, result["objective_history"], color=EMBER, linewidth=2.5)
+    axes[0].set_xlabel("Gradient iteration", color=MUTED)
+    axes[0].set_ylabel("Coupled objective", color=MUTED)
+    axes[0].set_title("GRADIENTS DO THE WORK", loc="left", color=TEXT, fontsize=10, weight="bold")
+
+    labels = ["Burned area", "Smoke exposure"]
+    initial = [result["burned_area_initial"], result["smoke_exposure_initial"]]
+    final = [result["burned_area_final"], result["smoke_exposure_final"]]
+    x = np.arange(len(labels))
+    width = 0.34
+    axes[1].bar(x - width / 2, initial, width, color=FIRE, label="Initial")
+    axes[1].bar(x + width / 2, final, width, color=SMOKE, label="Optimized")
+    axes[1].set_xticks(x, labels, color=TEXT)
+    axes[1].set_ylabel("Normalized physical impact", color=MUTED)
+    axes[1].set_title("PHYSICAL IMPACT", loc="left", color=TEXT, fontsize=10, weight="bold")
+    axes[1].legend(frameon=False, labelcolor=TEXT)
+
+    figure.text(
+        0.5,
+        0.04,
+        f"u_fuel {result['level_history'][0]:.3f} → {result['level']:.3f} · "
+        f"objective {result['objective_history'][0]:.3f} → {result['objective_history'][-1]:.3f}",
+        ha="center",
+        color=MUTED,
+        fontsize=9,
+    )
+    figure.savefig(output_path, dpi=180, facecolor=INK, metadata={"Software": "ClimaCare-Risk"})
+    plt.close(figure)
+
+
 def main() -> None:
     args = _parse_args()
     output_dir = args.output_dir.resolve()
@@ -443,16 +488,23 @@ def main() -> None:
     config = load_tiny_config()
     direct = _load_json(DIRECT_RESULT)
     portfolio = _load_json(PORTFOLIO_RESULT)
-    fire_frames, smoke_frames = _simulate_fields(config)
+    prevention = _load_json(PREVENTION_RESULT)
 
     animation_path = output_dir / "tiny_fire_smoke.gif"
     health_path = output_dir / "health_impacts.png"
     portfolio_path = output_dir / "portfolio_outcomes.png"
-    render_field_animation(config, fire_frames, smoke_frames, animation_path)
+    prevention_path = output_dir / "prevention_optimization.png"
+
+    if animation_path.exists():
+        print(f"kept {animation_path.relative_to(ROOT)} (local C++ kernel unavailable)")
+    else:
+        fire_frames, smoke_frames = _simulate_fields(config)
+        render_field_animation(config, fire_frames, smoke_frames, animation_path)
     render_health_impacts(direct, health_path)
     render_portfolio_outcomes(portfolio, portfolio_path)
+    render_prevention_optimization(prevention, prevention_path)
 
-    for path in (animation_path, health_path, portfolio_path):
+    for path in (animation_path, health_path, portfolio_path, prevention_path):
         try:
             display_path = path.relative_to(ROOT)
         except ValueError:
