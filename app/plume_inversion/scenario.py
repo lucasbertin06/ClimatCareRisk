@@ -31,6 +31,8 @@ class Scenario:
 
 def make_obstacle_mask(size: int = 32) -> jnp.ndarray:
     """Create two grid-aligned blocked building strips."""
+    if size < 3:
+        raise ValueError(f"grid_size must be >= 3, got {size}")
     mask = jnp.zeros((size, size), dtype=jnp.float32)
     mask = mask.at[size // 3 : 2 * size // 3, size // 5 : size // 5 + 2].set(1.0)
     mask = mask.at[size // 4 : 3 * size // 4, 3 * size // 5 : 3 * size // 5 + 2].set(
@@ -45,6 +47,10 @@ def make_scenario(
     steps: int = 300,
 ) -> Scenario:
     """Build a deterministic noisy tracer-release scenario."""
+    if steps < 2:
+        raise ValueError(f"steps must be >= 2, got {steps}")
+    if grid_size < 3:
+        raise ValueError(f"grid_size must be >= 3, got {grid_size}")
     times = jnp.arange(steps, dtype=jnp.float32) * 0.005
     sensor_positions = jnp.array(
         [[0.45, 0.42], [0.55, 0.42], [0.65, 0.42], [0.55, 0.55], [0.65, 0.55]],
@@ -72,6 +78,7 @@ def make_scenario(
         spatial_sigma=spatial_sigma,
         temporal_sigma=temporal_sigma,
         dt=dt,
+        grid_size=grid_size,
     )
     sensor_parameters = {
         "concentration": plume["sensor_concentration"],

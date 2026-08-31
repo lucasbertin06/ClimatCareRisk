@@ -17,7 +17,14 @@ def _grid(size: int = DEFAULT_GRID_SIZE) -> tuple[jax.Array, jax.Array]:
 
 def _sample_sensor_field(field: jax.Array, sensor_positions: jax.Array) -> jax.Array:
     size = field.shape[-1]
-    coordinates = jnp.clip(sensor_positions, 0.0, 1.0) * (size - 1)
+    if getattr(sensor_positions, "ndim", None) != 2 or sensor_positions.shape[1] != 2:
+        raise ValueError("sensor_positions must have shape (S, 2)")
+    positions = jnp.asarray(sensor_positions)
+    if not bool(jnp.all(jnp.isfinite(positions))):
+        raise ValueError("sensor positions must be finite")
+    if not bool(jnp.all((positions >= 0.0) & (positions <= 1.0))):
+        raise ValueError("sensor positions must lie in [0, 1]")
+    coordinates = positions * (size - 1)
     x = coordinates[:, 0]
     y = coordinates[:, 1]
     x0 = jnp.floor(x).astype(jnp.int32)
@@ -54,6 +61,15 @@ def simulate_plume(
     grid_size: int = DEFAULT_GRID_SIZE,
 ) -> dict[str, jax.Array]:
     """Integrate a smooth advection-diffusion-release model."""
+    if grid_size < 3:
+        raise ValueError(f"grid_size must be >= 3, got {grid_size}")
+    if getattr(obstacle_mask, "shape", None) != (grid_size, grid_size):
+        raise ValueError(
+            f"obstacle_mask must have shape ({grid_size}, {grid_size}), "
+            f"got {getattr(obstacle_mask, 'shape', None)}"
+        )
+    if getattr(sensor_positions, "ndim", None) != 2 or sensor_positions.shape[1] != 2:
+        raise ValueError("sensor_positions must have shape (S, 2)")
     grid_x, grid_y = _grid(grid_size)
     dx = 1.0 / (grid_size - 1)
     mask = 1.0 - jnp.clip(obstacle_mask, 0.0, 1.0)
@@ -106,6 +122,12 @@ def simulate_plume(
 
 def plume_apply(inputs: dict[str, Any]) -> dict[str, jax.Array]:
     """Adapt a serialized Tesseract input mapping to the transport solver."""
+    obstacle_mask = inputs["obstacle_mask"]
+    if getattr(obstacle_mask, "ndim", None) != 2:
+        raise ValueError("obstacle_mask must be a two-dimensional grid")
+    grid_size = int(obstacle_mask.shape[0])
+    if obstacle_mask.shape[1] != grid_size:
+        raise ValueError("obstacle_mask must be square")
     return simulate_plume(
         source_position=inputs["source_position"],
         source_time=inputs["source_time"],
@@ -115,8 +137,9 @@ def plume_apply(inputs: dict[str, Any]) -> dict[str, jax.Array]:
         decay_rate=inputs["decay_rate"],
         times=inputs["times"],
         sensor_positions=inputs["sensor_positions"],
-        obstacle_mask=inputs["obstacle_mask"],
+        obstacle_mask=obstacle_mask,
         spatial_sigma=inputs["spatial_sigma"],
         temporal_sigma=inputs["temporal_sigma"],
         dt=inputs["dt"],
+        grid_size=grid_size,
     )

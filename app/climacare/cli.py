@@ -20,8 +20,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import jax
 jax.config.update("jax_enable_x64", True)
@@ -58,7 +56,7 @@ def run_direct(output_dir : Path) -> None :
 
         zones = default_zones(config)
         dt = config.dt
-        cell_area = 1.0
+        cell_area = config.grid.cell_area
         impacts = []
         for zone in zones :
             exposure = mean_exposure(out["concentration_frames"], zone,
@@ -185,7 +183,7 @@ def run_uq_command(output_dir : Path, nuts : bool, num_warmup : int, num_samples
 def run_portfolio_command(output_dir : Path, fake : bool, n : int, steps : int,
                            lambda_cvar : float, num_samples : int, seed : int) -> None :
     # E5/E6 : posterior scenarios -> robust portfolio optimisation -> stress tests
-    from loss_structure import (
+    from climacare.portfolio import (
         compare_policies,
         evaluate_smart_criterion,
         generate_efficient_frontier,
@@ -201,12 +199,12 @@ def run_portfolio_command(output_dir : Path, fake : bool, n : int, steps : int,
         from climacare.inverse import run_map
         from climacare.uq import laplace_approx
         from climacare.zones import default_zones
-        from generate_scenario import generate_scenario
+        from climacare.scenario_generation import generate_scenario
 
         config = load_tiny_config()
         zones = default_zones(config)
         dt = config.dt
-        cell_area = config.grid.cell_area if hasattr(config.grid, "cell_area") else 1.0
+        cell_area = config.grid.cell_area
 
         with open_pipeline(config) as pipeline :
             observations = _observations_at_truth(pipeline, config)

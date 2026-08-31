@@ -98,6 +98,17 @@ def test_negative_slope_is_rejected() -> None:
     with pytest.raises(ValueError, match=r"\[0, 1\]"):
         make_zone(filter_efficiency=1.5)
 
+def test_zero_population_is_rejected() -> None:
+    zone = make_zone(density=jnp.zeros((GRID, GRID)))
+    concentration = jnp.ones((2, GRID, GRID))
+    with pytest.raises(ValueError, match="population must be strictly positive"):
+        mean_exposure(concentration, zone, dt=0.1, cell_area=CELL_AREA)
+
+
+def test_negative_density_is_rejected() -> None:
+    with pytest.raises(ValueError, match="density must be non-negative"):
+        make_zone(density=jnp.full((GRID, GRID), -1.0))
+
 
 # --------------------------------------------------------------------------- #
 # Finance

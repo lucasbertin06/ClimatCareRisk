@@ -12,42 +12,53 @@ from climacare.inverse import make_physical_loss
 from climacare.objective import Observations
 from climacare.pipeline import TesseractPipeline
 
-def probabilistic_model( # y = G(theta) + noise, Allows fixing certain parameters
-    pipeline : TesseractPipeline,
-    observations : Observations, # Structure containing field data collected from sensors
-    fixed_theta : jnp.ndarray = None, 
-    free_indices : tuple = (0, 1, 2, 3), 
-) :
+def probabilistic_model(
+    pipeline: TesseractPipeline,
+    observations: Observations,
+    fixed_theta: jnp.ndarray | None = None,
+    free_indices: tuple = (0, 1, 2, 3),
+) -> None:
+    """Define the masked posterior model for the physical parameters."""
+    config = pipeline.config
+    priors = config.priors
+    low, high = config.position_bounds
+    components = []
 
-    # we have : y = G(θ, u) + ε, ε ∼ N (0, Σ) 
-
-    config = pipeline.config # Extract global configuration from pipeline
-    priors = config.priors # Extract prior distribution hyperparameters (means, stds)
-    low, high = config.position_bounds # Extract grid spatial bounds [min, max]
-
-    components = [] # to reconstruct the theta vector 
-
-    for i, name in enumerate(PARAMETER_NAMES) :  
-        if i not in free_indices:  #
-            components.append(fixed_theta[i]) # Keep constant value for fixed parameter
-        elif name in ("x0", "y0") : 
-            components.append(numpyro.sample(name, dist.Uniform(low, high))) # Uninformative uniform prior
-        elif name == "log_amplitude" : # Case for smoke emission intensity (log scale)
-            components.append(numpyro.sample(name, dist.Normal(priors.log_amplitude_mean, priors.log_amplitude_std),
+    for i, name in enumerate(PARAMETER_NAMES):
+        if i not in free_indices:
+            components.append(fixed_theta[i])
+        elif name in ("x0", "y0"):
+            components.append(numpyro.sample(name, dist.Uniform(low, high)))
+        elif name == "log_amplitude":
+            components.append(
+                numpyro.sample(
+                    name,
+                    dist.Normal(priors.log_amplitude_mean, priors.log_amplitude_std),
                 )
             )
-        elif name == "delta_phi" :  # Case for wind direction correction/deviation
-            components.append(numpyro.sample(name, dist.Normal(0.0, priors.delta_phi_std))) # Sample according to Normal prior centered at zero
-           
-    theta = jnp.stack(components) # Stack 4 scalars to form the JAX theta vector
-    predictions = pipeline.sensor_predictions(theta) # Simulate the direct physical model
+        elif name == "delta_phi":
+            components.append(
+                numpyro.sample(
+                    name,
+                    dist.TruncatedNormal(
+                        0.0,
+                        priors.delta_phi_std,
+                        low=-config.wind.delta_phi_max,
+                        high=config.wind.delta_phi_max,
+                    ),
+                )
+            )
 
-    sigma = jnp.asarray(observations.noise_std) # Convert sensor noise standard deviation to JAX array
-    numpyro.sample(  # Define likelihood p(y|theta) comparing simulation and observations
-        "obs", 
-        dist.Normal(predictions, sigma),  
-        obs = jnp.asarray(observations.values), # Fix actual field observations measured by sensors
-    )
+    theta = jnp.stack(components)
+    predictions = pipeline.sensor_predictions(theta)
+    sigma = jnp.asarray(observations.noise_std)
+    mask = jnp.asarray(observations.mask, dtype=bool)
+    with numpyro.handlers.mask(mask=mask):
+        numpyro.sample(
+            "obs",
+            dist.Normal(predictions, sigma),
+            obs=jnp.asarray(observations.values),
+        )
 
 def laplace_approx(
     pipeline : TesseractPipeline, 

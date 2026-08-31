@@ -115,7 +115,39 @@ The archived `archive/wildfire_prototype/` is an incomplete post-C0 real-data pr
 ```bash
 git clone https://github.com/lucasbertin06/ClimatCareRisk.git
 cd ClimatCareRisk
-python -m pip install -e app -e components/shared_code
+python -m venv .venv
+source .venv/bin/activate
+pip install -e 'app[dev]' -e components/shared_code
+```
+
+### Local paths without Tesseract images
+
+The synthetic portfolio path runs without Docker:
+
+```bash
+python -m climacare.cli portfolio --fake --output-dir results/portfolio_fake
+```
+
+The standalone plume inversion CLI exposes an explicit subcommand:
+
+```bash
+plume_inversion run --steps 120
+```
+
+The visual assets use the local PyTorch solver and compiled C++ smoke kernel:
+
+```bash
+make smoke-kernel
+python scripts/generate_visualizations.py
+```
+
+Assets are written to `docs/assets/`. Use `--output-dir PATH` to render elsewhere.
+
+### Full heterogeneous pipeline
+
+Build and tag both Tesseract images:
+
+```bash
 make build-c0
 ```
 
@@ -146,6 +178,8 @@ python -m climacare.cli portfolio --output-dir results/portfolio
 # Full test suite
 python -m pytest tests -q
 ```
+
+The test suite covers the local numerical kernels, direct composition, cross-component gradients, inversion, health calculations, smoke transport, fire spread, and portfolio loss structure. CI compiles and tests the local C++ smoke kernel explicitly; container-dependent tests run again after both Tesseract images are built.
 
 Make shortcuts:
 

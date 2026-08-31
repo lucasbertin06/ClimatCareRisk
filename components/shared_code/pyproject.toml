@@ -8,9 +8,7 @@ version = "0.2.0"
 description = "Shared differentiable kernels for Tesseract scientific workflows"
 authors = [{ name = "TataneSan" }]
 requires-python = ">=3.11"
-dependencies = [
-    # Add dependencies here
-]
+dependencies = ["numpy>=2.0", "torch>=2.0", "jax>=0.4"]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -22,3 +20,7 @@ include = [
     "wildfire_shared",
     "wildfire_shared.*",
 ]
+exclude = ["*.build", "*.build.*", "*.__pycache__", "*.__pycache__.*"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["__pycache__/*", "*.pyc"]

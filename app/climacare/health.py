@@ -1,18 +1,11 @@
 r"""Smoke exposure and incremental health impact, specification section 10.
 
-Native JAX, downstream of the pipeline and deliberately outside the MAP
-likelihood. The two invariants that matter are:
-
-* the dose is a **mean per person**, so it divides by the zone population
-  :math:`N_r = \Delta x\Delta y\sum p_{r,ij}`;
-* the incremental impact vanishes exactly at zero exposure, because it is
-  written as a softplus difference.
-
 The coefficients are synthetic. Nothing here is a clinical prediction.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import jax
@@ -23,15 +16,25 @@ __all__ = ["HealthZone", "incremental_health_impact", "mean_exposure", "zone_pop
 
 @dataclass(frozen=True)
 class HealthZone:
-    """Synthetic exposure zone."""
+    """Synthetic exposure zone with a finite, non-negative density field."""
 
     name: str
-    density: jax.Array  # (ny, nx), non-negative synthetic population density
-    baseline: float  # a_r
-    slope: float  # b_r >= 0
-    filter_efficiency: float  # eta_filter,r in [0, 1]
+    density: jax.Array
+    baseline: float
+    slope: float
+    filter_efficiency: float
 
     def __post_init__(self) -> None:
+        if getattr(self.density, "ndim", None) != 2:
+            raise ValueError(f"zone {self.name}: density must be a two-dimensional field")
+        if not bool(jnp.all(jnp.isfinite(self.density))):
+            raise ValueError(f"zone {self.name}: density must be finite")
+        if bool(jnp.any(self.density < 0.0)):
+            raise ValueError(f"zone {self.name}: density must be non-negative")
+        if not math.isfinite(self.baseline) or not math.isfinite(self.slope):
+            raise ValueError(f"zone {self.name}: coefficients must be finite")
+        if not math.isfinite(self.filter_efficiency):
+            raise ValueError(f"zone {self.name}: filter efficiency must be finite")
         if self.slope < 0.0:
             raise ValueError(f"zone {self.name}: slope b_r must be non-negative")
         if not 0.0 <= self.filter_efficiency <= 1.0:
@@ -40,7 +43,11 @@ class HealthZone:
 
 def zone_population(zone: HealthZone, cell_area: float) -> jax.Array:
     r"""Return :math:`N_r = \Delta x\Delta y\sum_{ij} p_{r,ij}`."""
+    if not math.isfinite(cell_area) or cell_area <= 0.0:
+        raise ValueError(f"cell_area must be finite and positive, got {cell_area}")
     total = cell_area * jnp.sum(zone.density)
+    if float(total) <= 0.0:
+        raise ValueError(f"zone {zone.name}: population must be strictly positive")
     return total
 
 
@@ -52,21 +59,16 @@ def mean_exposure(
     cell_area: float,
     filter_level: jax.Array | float = 0.0,
 ) -> jax.Array:
-    r"""Return the mean dose per person :math:`e_r` of section 10.
-
-    Args:
-        concentration: history of shape ``(n_levels, ny, nx)``.
-        zone: exposure zone carrying the synthetic density and coefficients.
-        dt: integration step between two levels.
-        cell_area: :math:`\Delta x\Delta y`.
-        filter_level: continuous filtration intensity :math:`u_{filter,r}`.
-
-    Returns:
-        The scalar mean dose, zero when the concentration vanishes.
-
-    Raises:
-        ValueError: if the zone population is not strictly positive.
-    """
+    r"""Return the mean dose per person :math:`e_r` of section 10."""
+    if getattr(concentration, "ndim", None) != 3:
+        raise ValueError("concentration must have shape (n_levels, ny, nx)")
+    if tuple(concentration.shape[1:]) != tuple(zone.density.shape):
+        raise ValueError(
+            "concentration and density grids disagree: "
+            f"{tuple(concentration.shape[1:])} vs {tuple(zone.density.shape)}"
+        )
+    if not math.isfinite(dt) or dt <= 0.0:
+        raise ValueError(f"dt must be finite and positive, got {dt}")
     population = zone_population(zone, cell_area)
     weighted = jnp.tensordot(concentration, zone.density, axes=((1, 2), (0, 1)))
     attenuation = 1.0 - zone.filter_efficiency * jnp.clip(filter_level, 0.0, 1.0)
