@@ -33,8 +33,7 @@ from climacare_shared.fire_model import fire_forward, frame_indices
 from climacare_shared.kernel import KernelNotBuiltError, load_smoke_kernel
 
 DEFAULT_OUTPUT_DIR = ROOT / "docs" / "assets"
-DIRECT_RESULT = ROOT / "results" / "tiny_direct" / "tiny_direct.json"
-PORTFOLIO_RESULT = ROOT / "results" / "portfolio_e5_pipeline.json"
+PORTFOLIO_RESULT = ROOT / "results" / "portfolio_e5_fake.json"
 PREVENTION_RESULT = ROOT / "results" / "prevention" / "prevention.json"
 
 INK = "#0B1820"
@@ -128,6 +127,37 @@ def _simulate_fields(config: TinyConfig) -> tuple[np.ndarray, np.ndarray]:
     )
     return np.asarray(fire_frames), np.asarray(smoke_frames)
 
+
+def _health_payload(
+    config: TinyConfig, smoke_frames: np.ndarray
+) -> dict[str, Any]:
+    """Compute health diagnostics from the current smoke simulation."""
+    frame_dt = config.final_time / (len(smoke_frames) - 1)
+    impacts = []
+    zone_specs = (
+        ((0.3, 0.3), 0.12, 800.0, -2.0, 4.0),
+        ((0.75, 0.25), 0.18, 80.0, -2.5, 3.0),
+        ((0.6, 0.7), 0.06, 250.0, -1.0, 6.0),
+    )
+    mesh_x, mesh_y = config.grid.meshgrid()
+    for (center_x, center_y), sigma, peak, baseline, slope in zone_specs:
+        density = peak * np.exp(
+            -((mesh_x - center_x) ** 2 + (mesh_y - center_y) ** 2)
+            / (2.0 * sigma**2)
+        )
+        population = config.grid.cell_area * density.sum()
+        exposure = (
+            frame_dt
+            * config.grid.cell_area
+            * np.sum(smoke_frames * density[None, :, :])
+            / population
+        )
+        impact = population * (
+            np.logaddexp(0.0, baseline + slope * exposure)
+            - np.logaddexp(0.0, baseline)
+        )
+        impacts.append(float(impact))
+    return {"diagnostics": {"health_impacts_per_zone": impacts}}
 
 def _style_axis(axis: plt.Axes) -> None:
     axis.set_facecolor(PANEL)
@@ -368,7 +398,7 @@ def render_portfolio_outcomes(portfolio: dict[str, Any], output_path: Path) -> N
     figure.text(
         0.055,
         0.84,
-        "Expected loss and tail risk under synthetic portfolio policies · E5 pipeline run",
+        "Expected total loss and tail risk under corrected synthetic scenarios",
         color=MUTED,
         fontsize=10.5,
     )
@@ -411,8 +441,12 @@ def render_portfolio_outcomes(portfolio: dict[str, Any], output_path: Path) -> N
         axis.set_axisbelow(True)
         for spine in axis.spines.values():
             spine.set_visible(False)
-
     reduction = 100 * (1 - expected[-1] / expected[0])
+    badge_text = (
+        f"OPTIMIZED EXPECTED LOSS  −{reduction:.1f}%"
+        if reduction >= 0.05
+        else "OPTIMIZED TOTAL LOSS ≈ UNIFORM"
+    )
     badge = FancyBboxPatch(
         (0.675, 0.745),
         0.29,
@@ -427,7 +461,7 @@ def render_portfolio_outcomes(portfolio: dict[str, Any], output_path: Path) -> N
     figure.text(
         0.692,
         0.758,
-        f"OPTIMIZED EXPECTED LOSS  −{reduction:.1f}%",
+        badge_text,
         color=EMBER,
         fontsize=8.2,
         weight="bold",
@@ -486,20 +520,17 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     config = load_tiny_config()
-    direct = _load_json(DIRECT_RESULT)
     portfolio = _load_json(PORTFOLIO_RESULT)
     prevention = _load_json(PREVENTION_RESULT)
+    fire_frames, smoke_frames = _simulate_fields(config)
+    direct = _health_payload(config, smoke_frames)
 
     animation_path = output_dir / "tiny_fire_smoke.gif"
     health_path = output_dir / "health_impacts.png"
     portfolio_path = output_dir / "portfolio_outcomes.png"
     prevention_path = output_dir / "prevention_optimization.png"
 
-    if animation_path.exists():
-        print(f"kept {animation_path.relative_to(ROOT)} (local C++ kernel unavailable)")
-    else:
-        fire_frames, smoke_frames = _simulate_fields(config)
-        render_field_animation(config, fire_frames, smoke_frames, animation_path)
+    render_field_animation(config, fire_frames, smoke_frames, animation_path)
     render_health_impacts(direct, health_path)
     render_portfolio_outcomes(portfolio, portfolio_path)
     render_prevention_optimization(prevention, prevention_path)
