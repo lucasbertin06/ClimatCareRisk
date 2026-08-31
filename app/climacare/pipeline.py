@@ -72,17 +72,27 @@ class TesseractPipeline:
         angle = self.config.wind.phi_base + delta_phi
         return jnp.stack([jnp.cos(angle), jnp.sin(angle)])
 
-    def fire_inputs(self, theta: jax.Array, frame_count: int = 1) -> dict[str, Any]:
+    def fire_inputs(
+        self,
+        theta: jax.Array,
+        frame_count: int = 1,
+        fuel_prevention: jax.Array | None = None,
+    ) -> dict[str, Any]:
         """Return the FireSpread payload for a physical parameter vector."""
         config = self.config
         fire = config.fire
         direction = self._direction(theta[3])
+        prevention = (
+            jnp.asarray(config.fuel_prevention)
+            if fuel_prevention is None
+            else jnp.asarray(fuel_prevention)
+        )
         return {
             "ignition": jnp.stack([theta[0], theta[1], theta[2]]),
             "wind": config.wind.fire_speed * direction,
             "moisture": jnp.asarray(config.moisture),
             "fuel_base": jnp.asarray(config.fuel_base),
-            "fuel_prevention": jnp.asarray(config.fuel_prevention),
+            "fuel_prevention": prevention,
             "dt": config.dt,
             "n_steps": config.n_steps,
             "diffusivity": fire.diffusivity,
@@ -131,12 +141,21 @@ class TesseractPipeline:
         )
         return smoke["sensor_concentration"]
 
-    def direct(self, theta: jax.Array, frame_count: int | None = None) -> dict[str, Any]:
+    def direct(
+        self,
+        theta: jax.Array,
+        frame_count: int | None = None,
+        fuel_prevention: jax.Array | None = None,
+    ) -> dict[str, Any]:
         """Run both Tesseracts once and return every diagnostic field."""
         from tesseract_jax import apply_tesseract
 
         frames = self.config.frame_count if frame_count is None else frame_count
-        fire = apply_tesseract(self.fire_client, self.fire_inputs(theta, frames), vmap_method="sequential")
+        fire = apply_tesseract(
+            self.fire_client,
+            self.fire_inputs(theta, frames, fuel_prevention),
+            vmap_method="sequential",
+        )
         smoke = apply_tesseract(
             self.smoke_client, self.smoke_inputs(theta, fire["smoke_source"], frames),
             vmap_method="sequential",

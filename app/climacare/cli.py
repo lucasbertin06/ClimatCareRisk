@@ -5,6 +5,7 @@ Usage :
     python -m climacare.cli map       --output-dir results/tiny_map
     python -m climacare.cli uq        --output-dir results/tiny_uq [--nuts]
     python -m climacare.cli portfolio --output-dir results/portfolio [--fake]
+    python -m climacare.cli prevention --output-dir results/prevention
 
 Runs one direct pipeline evaluation at the ground truth, checks numerical
 stability, computes the downstream physical loss and writes a complete,
@@ -276,6 +277,48 @@ def run_portfolio_command(output_dir : Path, fake : bool, n : int, steps : int,
     print(f"portfolio json written to {artifact}")
 
 
+def run_prevention_command(
+    output_dir: Path,
+    initial_level: float,
+    steps: int,
+    learning_rate: float,
+) -> None:
+    # Minimal end-to-end intervention experiment required by the hackathon:
+    # u_fuel -> FireSpread -> SmokeTransport -> gradient-based optimization.
+    from climacare.prevention import optimize_fuel_prevention
+
+    config = load_tiny_config()
+    theta = jnp.asarray(config.truth)
+
+    with open_pipeline(config) as pipeline:
+        result = optimize_fuel_prevention(
+            pipeline,
+            theta,
+            initial_level=initial_level,
+            steps=steps,
+            learning_rate=learning_rate,
+        )
+
+    payload = {
+        "command": "prevention",
+        "versions": pipeline_versions(),
+        "git_commit": _git_commit(),
+        "theta": [float(x) for x in np.asarray(theta)],
+        "result": result,
+    }
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact = output_dir / "prevention.json"
+    artifact.write_text(json.dumps(payload, indent=2))
+    print(
+        f"[prevention] level {result['level_history'][0]:.4f} -> "
+        f"{result['level']:.4f}, objective "
+        f"{result['objective_history'][0]:.6f} -> "
+        f"{result['objective_history'][-1]:.6f}"
+    )
+    print(f"prevention.json written to {artifact}")
+
+
 def main() -> None :
     parser = argparse.ArgumentParser(prog = "climacare.cli")
     sub = parser.add_subparsers(dest = "command", required = True)
@@ -304,6 +347,15 @@ def main() -> None :
     portfolio_parser.add_argument("--num-samples", type = int, default = 20)
     portfolio_parser.add_argument("--seed", type = int, default = 0)
 
+    prevention_parser = sub.add_parser(
+        "prevention",
+        help = "optimize fuel prevention through both Tesseracts",
+    )
+    prevention_parser.add_argument("--output-dir", type=Path, required=True)
+    prevention_parser.add_argument("--initial-level", type=float, default=0.2)
+    prevention_parser.add_argument("--steps", type=int, default=20)
+    prevention_parser.add_argument("--learning-rate", type=float, default=0.2)
+
     args = parser.parse_args()
 
     if args.command == "direct" :
@@ -315,6 +367,13 @@ def main() -> None :
     elif args.command == "portfolio" :
         run_portfolio_command(args.output_dir, args.fake, args.n, args.steps,
             args.lambda_cvar, args.num_samples, args.seed)
+    elif args.command == "prevention":
+        run_prevention_command(
+            args.output_dir,
+            args.initial_level,
+            args.steps,
+            args.learning_rate,
+        )
 
 
 if __name__ == "__main__" :
