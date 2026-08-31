@@ -226,6 +226,5 @@ Apache License 2.0 — see [`LICENSE`](LICENSE).
 
 ## Team
 
-- Marko Sinadinovic — scientific modeling and validation
 - Antoine — HPC, kernels and inference
 - Lucas (Volta) — sustainable finance, CVaR, resilience allocation and integration
